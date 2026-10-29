@@ -44,7 +44,10 @@ supabase functions deploy
   ```sql
   update public.profiles set role = 'admin', account_status = 'active' where email = '<you@example.com>';
   ```
-- Enroll TOTP for every admin, then Admin → Settings → `admin_require_mfa = true`.
+- Every admin: Dashboard → Settings → *Set up two-factor*, scan the QR in an authenticator app and verify a
+  code (this session is now aal2). Then Admin → Settings → `admin_require_mfa = true`. The switch is refused
+  from a session without two-factor, so you cannot lock yourself out.
+- Admin → Payment methods: add the methods you pay out with (they are only ever shown inside the dashboard).
 
 ## 5. Settings (Admin → Settings)
 `min_usd` 10, `max_usd` 1000, `invoice_expiry_seconds` 3600, `default_commission_pct`, `withdrawal_min_usd`,

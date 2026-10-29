@@ -138,6 +138,8 @@ function startInvoice(invoice) {
   $("inv-usd").textContent = formatUsd(invoice.amount_usd);
   $("inv-sats").textContent = t("pay.sats", { n: formatSats(invoice.amount_sats) });
   $("inv-payee").textContent = state.link.display_name;
+  $("inv-memo").hidden = !invoice.memo;
+  $("inv-memo").textContent = invoice.memo ?? "";
   $("open-deeplink").href = launchUrl(invoice.bolt11);
   $("open-wallet").href = lightningUri(invoice.bolt11);
   $("inv-status").textContent = t("pay.waiting");
@@ -203,6 +205,12 @@ function finish(status) {
 function backToAmount() {
   stopPolling();
   state.invoice = null;
+  if (location.search) history.replaceState(null, "", location.pathname); // drop ?i= so a reload starts fresh
+  if (!state.canStartNew) {
+    show("notfound");
+    return;
+  }
+  renderAmount();
   $("amount").value = state.lastAmount;
   show("amount");
   $("amount").focus();
@@ -241,6 +249,33 @@ onLangChange(() => {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// /<slug>?i=<payment id>: an invoice an admin issued on this link. Opens straight to the QR
+// (or to its final state). The id is the capability; the slug must match.
+async function bootInvoice(paymentId) {
+  let view;
+  try {
+    view = await callFunction(`invoice?id=${encodeURIComponent(paymentId)}`, { method: "GET" });
+  } catch {
+    view = null;
+  }
+  if (!view || view.slug !== state.slug) {
+    show("notfound");
+    return;
+  }
+  if (!state.link) {
+    state.link = { display_name: view.display_name, min_usd: 0, max_usd: 0, quick_amounts: [], checkout_enabled: false };
+  }
+  state.lastAmount = view.amount_usd;
+  if (view.status === "pending" && view.bolt11) {
+    startInvoice({ ...view, payment_id: paymentId });
+  } else {
+    state.invoice = { payment_id: paymentId };
+    finish(view);
+  }
+}
+
 async function boot() {
   state.slug = slugFromPath(location.pathname);
   if (!state.slug) {
@@ -253,12 +288,21 @@ async function boot() {
   } catch {
     state.link = null;
   }
+  state.canStartNew = Boolean(state.link);
+  if (state.link) {
+    state.link.min_usd = Number(state.link.min_usd);
+    state.link.max_usd = Number(state.link.max_usd);
+  }
+
+  const invoiceId = new URLSearchParams(location.search).get("i");
+  if (invoiceId && UUID_RE.test(invoiceId)) {
+    await bootInvoice(invoiceId);
+    return;
+  }
   if (!state.link) {
     show("notfound");
     return;
   }
-  state.link.min_usd = Number(state.link.min_usd);
-  state.link.max_usd = Number(state.link.max_usd);
   renderAmount();
   show("amount");
 }

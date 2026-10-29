@@ -119,6 +119,14 @@ textarea { min-height: 96px; resize: vertical; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; accent-color: var(--accent); }
 .check { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+.pw-field { position: relative; display: flex; }
+.pw-field input { padding-right: 72px; }
+.pw-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: var(--muted); font: inherit; font-size: 0.85rem; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.pw-toggle:hover { color: var(--text); background: var(--surface-2); }
+.mfa-qr { background: #ffffff; border-radius: var(--radius-sm); padding: 10px; width: 200px; height: 200px; }
+.result-box { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 16px; }
+.method-card .field-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.attempts { display: flex; flex-wrap: wrap; gap: 8px; }
 .error { color: var(--danger); font-size: 0.9rem; margin: 6px 0 0; }
 .notice { background: var(--info-soft); color: var(--info); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 0.925rem; }
 .notice.warn { background: var(--accent-soft); color: var(--accent); }

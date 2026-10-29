@@ -36,7 +36,13 @@ const DB_ERRORS: Record<string, number> = {
   payout_method_unavailable: 400,
   telegram_not_configured: 503,
   reason_required: 400,
+  reference_required: 400,
   statement_not_closed: 409,
+  statement_wrong_state: 409,
+  cycle_in_future: 400,
+  invalid_cycle_date: 400,
+  commission_invalid: 400,
+  cannot_change_own_status: 400,
 };
 
 export function dbError(err: { message?: string } | null | undefined): HttpError {

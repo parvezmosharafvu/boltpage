@@ -109,11 +109,82 @@ export async function renderGate(container, profile) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Two-factor (TOTP). Supabase marks a session aal2 once a code is verified; admin RPCs
+// require aal2 when admin_require_mfa is on.
+// ---------------------------------------------------------------------------
+
+// The verified TOTP factor id when this session still owes a second factor, else null.
+export async function pendingMfaFactor() {
+  const { data } = await getClient().auth.mfa.getAuthenticatorAssuranceLevel();
+  if (!data || data.nextLevel !== "aal2" || data.currentLevel === "aal2") return null;
+  const { data: factors } = await getClient().auth.mfa.listFactors();
+  return factors?.totp?.[0]?.id ?? null;
+}
+
+export async function sessionAal() {
+  const { data } = await getClient().auth.mfa.getAuthenticatorAssuranceLevel();
+  return data?.currentLevel ?? null;
+}
+
+export function mfaCodeForm(factorId, onVerified) {
+  const code = h("input", { id: "mfa-code", inputmode: "numeric", autocomplete: "one-time-code", maxlength: 6, required: true });
+  const err = h("p", { class: "error", role: "alert", hidden: true });
+  const form = h(
+    "form",
+    { class: "card raised stack", novalidate: true },
+    h("h1", {}, t("mfa.loginTitle")),
+    h("p", { class: "muted" }, t("mfa.loginBody")),
+    h("div", { class: "field" }, h("label", { for: "mfa-code" }, t("mfa.code")), code),
+    err,
+    h("button", { class: "btn btn-primary btn-block", type: "submit" }, t("mfa.verify")),
+    h("button", { class: "btn btn-ghost", type: "button", onclick: signOut }, t("nav.logout")),
+  );
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    err.hidden = true;
+    const { error } = await getClient().auth.mfa.challengeAndVerify({ factorId, code: code.value.replace(/\s/g, "") });
+    if (error) {
+      err.textContent = t("err.mfa_invalid");
+      err.hidden = false;
+      code.select();
+      return;
+    }
+    await onVerified();
+  });
+  setTimeout(() => code.focus());
+  return form;
+}
+
+// Show/hide button for every password field under root.
+export function enhancePasswords(root = document) {
+  for (const input of root.querySelectorAll('input[type="password"]:not([data-pw])')) {
+    input.dataset.pw = "1";
+    const btn = h("button", { type: "button", class: "pw-toggle", "aria-pressed": "false", dataset: { i18n: "common.show" } }, t("common.show"));
+    btn.addEventListener("click", () => {
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      btn.dataset.i18n = show ? "common.hide" : "common.show";
+      btn.textContent = t(btn.dataset.i18n);
+      btn.setAttribute("aria-pressed", String(show));
+      input.focus();
+    });
+    const wrap = h("div", { class: "pw-field" });
+    input.replaceWith(wrap);
+    wrap.append(input, btn);
+  }
+}
+
 // For dashboard/admin: returns the active profile or renders the right screen and returns null.
 export async function requireActive(container, { admin = false } = {}) {
   const { data } = await getClient().auth.getSession();
   if (!data.session) {
     location.replace("/login");
+    return null;
+  }
+  const factor = await pendingMfaFactor();
+  if (factor) {
+    container.replaceChildren(h("div", { class: "container narrow" }, mfaCodeForm(factor, () => location.reload())));
     return null;
   }
   const profile = await currentProfile();
@@ -180,6 +251,11 @@ function initRegister() {
 }
 
 async function routeSignedIn(container) {
+  const factor = await pendingMfaFactor();
+  if (factor) {
+    container.replaceChildren(mfaCodeForm(factor, () => routeSignedIn(container)));
+    return;
+  }
   const profile = await currentProfile();
   if (!profile) return;
   const home = homeFor(profile);
@@ -245,4 +321,7 @@ const page = document.body?.dataset.page;
 if (page === "register") initRegister();
 if (page === "login") initLogin();
 if (page === "reset") initReset();
-if (page) applyI18n();
+if (page) {
+  enhancePasswords();
+  applyI18n();
+}

@@ -57,6 +57,16 @@ Deno.test("Access redirects and server errors surface as LndError", async () => 
   await assertRejects(() => new LndClient(CFG, fetchImpl).lookupInvoice(HASH_A), LndError);
 });
 
+Deno.test("cancelInvoice: POST /v2/invoices/cancel with the base64 payment hash", async () => {
+  const { fetchImpl, calls } = mockFetch(() => jsonResponse({}));
+  await new LndClient(CFG, fetchImpl).cancelInvoice(HASH_A);
+  assertEquals(calls[0].method, "POST");
+  assertEquals(calls[0].url.pathname, "/v2/invoices/cancel");
+  assertEquals(JSON.parse(calls[0].body), { payment_hash: hexToBase64(HASH_A) });
+  assertEquals(calls[0].headers.get("Grpc-Metadata-macaroon"), CFG.macaroonHex);
+  await assertRejects(() => new LndClient(CFG, fetchImpl).cancelInvoice("not-a-hash"), LndError);
+});
+
 Deno.test("client refuses plain http and non-hex macaroons", () => {
   assertThrows(() => new LndClient({ ...CFG, restUrl: "http://lnd.example.test" }), LndError, "https");
   assertThrows(() => new LndClient({ ...CFG, macaroonHex: "not-hex!" }), LndError, "hex");

@@ -38,6 +38,9 @@ verify_jwt = false
 [functions.payment-status]
 verify_jwt = false
 
+[functions.invoice]
+verify_jwt = false
+
 [functions.lnd-watcher]
 verify_jwt = false
 
