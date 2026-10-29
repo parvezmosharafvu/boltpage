@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Boltpage — get paid in seconds</title>
+  <meta name="description" content="Share one payment link. Customers pay in dollars from any Lightning wallet and you see it land instantly.">
+  <meta name="theme-color" content="#0b0b0c">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Boltpage">
+  <meta property="og:title" content="Get paid in seconds">
+  <meta property="og:description" content="Share one payment link. Customers pay from any Lightning wallet and you see it land instantly.">
+  <meta property="og:image" content="/assets/og/og-home-v1.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/config.js"></script>
+  <script type="module" src="/i18n.js"></script>
+</head>
+<body>
+  <header class="site">
+    <div class="container bar">
+      <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#FFB800"/><path d="M36 8 L16 36 H30 L26 56 L48 26 H34 Z" fill="#0B0B0C"/></svg><span data-brand>Boltpage</span></a>
+      <nav>
+        <button class="btn btn-ghost btn-sm" type="button" data-lang-toggle data-i18n="lang.toggle">বাংলা</button>
+        <a class="btn btn-ghost btn-sm hide-sm" href="/login" data-i18n="nav.login">Log in</a>
+        <a class="btn btn-primary btn-sm" href="/register" data-i18n="nav.register">Create your link</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <section class="hero">
+        <div>
+          <h1 data-i18n="home.title">Get paid in seconds.</h1>
+          <p class="lead" data-i18n="home.lead">Share one link. Your customer picks an amount in dollars, pays from a Lightning wallet, and you see it land instantly.</p>
+          <div class="row">
+            <a class="btn btn-primary btn-lg" href="/register" data-i18n="home.ctaCreate">Create your link</a>
+            <a class="btn btn-secondary btn-lg" href="/login" data-i18n="home.ctaLogin">Log in</a>
+          </div>
+        </div>
+        <div class="hero-card" aria-hidden="true">
+          <div class="payee">
+            <div class="avatar">R</div>
+            <div>
+              <p class="muted small" data-i18n="pay.paying">You're paying</p>
+              <h2 data-i18n="home.sample.name">Rahim's Studio</h2>
+            </div>
+          </div>
+          <p class="note" data-i18n="home.sample.note">Thanks for your order!</p>
+          <div class="amount-input"><span>$</span><input value="50.00" tabindex="-1" readonly></div>
+          <div class="chips"><span class="chip">$10</span><span class="chip">$25</span><span class="chip" aria-pressed="true">$50</span><span class="chip">$100</span></div>
+          <span class="btn btn-primary btn-block" data-i18n="pay.continue">Continue</span>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="grid cols-3">
+          <div class="card feature">
+            <div class="icon">1</div>
+            <h3 data-i18n="home.f1.title">One link, any wallet</h3>
+            <p class="muted" data-i18n="home.f1.body">Payers open your link, choose an amount and pay from the Lightning wallet app they already use.</p>
+          </div>
+          <div class="card feature">
+            <div class="icon">⚡</div>
+            <h3 data-i18n="home.f2.title">Settles in seconds</h3>
+            <p class="muted" data-i18n="home.f2.body">Lightning payments confirm almost instantly. You see every payment in your dashboard as it arrives.</p>
+          </div>
+          <div class="card feature">
+            <div class="icon">19</div>
+            <h3 data-i18n="home.f3.title">Clear daily statements</h3>
+            <p class="muted" data-i18n="home.f3.body">Every evening at 19:00 (Dhaka time) you get a statement of what came in, the commission and your net.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2 data-i18n="home.how.title">How it works</h2>
+        <ol class="steps">
+          <li data-i18n="home.how.1">Create an account. Every new account is reviewed before it can receive payments.</li>
+          <li data-i18n="home.how.2">Create your payment link and share it anywhere: chat, social, email.</li>
+          <li data-i18n="home.how.3">Payers choose an amount and pay. Track everything and withdraw from your dashboard.</li>
+        </ol>
+      </section>
+
+      <section class="block container medium">
+        <h2 data-i18n="home.faq.title">Questions</h2>
+        <details class="faq"><summary data-i18n="home.faq.q1">Who pays the fees?</summary><p data-i18n="home.faq.a1">The payer pays exactly the amount shown. A service commission is deducted from what you receive, and you see it on every payment.</p></details>
+        <details class="faq"><summary data-i18n="home.faq.q2">What are the limits?</summary><p data-i18n="home.faq.a2">Each payment can be between $10 and $1,000.</p></details>
+        <details class="faq"><summary data-i18n="home.faq.q3">Why does my account need approval?</summary><p data-i18n="home.faq.a3">To keep the platform safe, an admin reviews every new account before it can receive payments.</p></details>
+        <details class="faq"><summary data-i18n="home.faq.q4">How do I get my money?</summary><p data-i18n="home.faq.a4">Request a withdrawal of your available balance from your dashboard.</p></details>
+        <p></p>
+        <a class="btn btn-primary" href="/register" data-i18n="home.ctaCreate">Create your link</a>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site">
+    <div class="container">
+      <span><span data-brand>Boltpage</span> · <span data-i18n="footer.rights">Payments over the Lightning Network.</span></span>
+      <nav><a href="/terms" data-i18n="footer.terms">Terms</a><a href="/privacy" data-i18n="footer.privacy">Privacy</a><a href="/contact" data-i18n="footer.contact">Contact</a></nav>
+    </div>
+  </footer>
+</body>
+</html>

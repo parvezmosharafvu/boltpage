@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy · Boltpage</title>
+  <meta name="theme-color" content="#0b0b0c">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/config.js"></script>
+  <script type="module" src="/i18n.js"></script>
+</head>
+<body>
+  <header class="site">
+    <div class="container bar">
+      <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#FFB800"/><path d="M36 8 L16 36 H30 L26 56 L48 26 H34 Z" fill="#0B0B0C"/></svg><span data-brand>Boltpage</span></a>
+      <nav><button class="btn btn-ghost btn-sm" type="button" data-lang-toggle data-i18n="lang.toggle">বাংলা</button><a class="btn btn-ghost btn-sm" href="/login" data-i18n="nav.login">Log in</a></nav>
+    </div>
+  </header>
+  <main>
+    <div class="container medium stack">
+      <h1>Privacy</h1>
+      <p class="notice warn">Template text. Replace with a privacy policy reviewed for your jurisdiction before launch.</p>
+      <h2>What we collect</h2>
+      <p>Account holders: name, email, phone, optional Telegram username, payment and withdrawal records. Payers: nothing beyond the payment itself; IP addresses are hashed with a secret salt for rate limiting and not stored in clear.</p>
+      <h2>What payers see</h2>
+      <p>A payment page shows only the display name and note the account holder chose. It never shows their email, balance or other payments.</p>
+      <h2>Retention</h2>
+      <p>Financial records are kept as required for accounting. Rate-limit counters are deleted after one day.</p>
+      <h2>Contact</h2>
+      <p>See the contact page.</p>
+    </div>
+  </main>
+  <footer class="site">
+    <div class="container">
+      <span><span data-brand>Boltpage</span> · <span data-i18n="footer.rights">Payments over the Lightning Network.</span></span>
+      <nav><a href="/terms" data-i18n="footer.terms">Terms</a><a href="/privacy" data-i18n="footer.privacy">Privacy</a><a href="/contact" data-i18n="footer.contact">Contact</a></nav>
+    </div>
+  </footer>
+</body>
+</html>

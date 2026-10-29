@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+public/config.js
+.wrangler/
+.dev.vars
+supabase/.branches/
+supabase/.temp/
+test-results/
+playwright-report/
+.probe/
+*.log
+.DS_Store

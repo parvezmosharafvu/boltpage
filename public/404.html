@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Boltpage</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b0b0c">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/config.js"></script>
+  <script type="module" src="/pay.js"></script>
+</head>
+<body>
+  <header class="site">
+    <div class="container bar">
+      <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#FFB800"/><path d="M36 8 L16 36 H30 L26 56 L48 26 H34 Z" fill="#0B0B0C"/></svg><span data-brand>Boltpage</span></a>
+      <nav><button class="btn btn-ghost btn-sm" type="button" data-lang-toggle data-i18n="lang.toggle">বাংলা</button></nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container narrow">
+      <section id="view-loading" class="center-screen" aria-live="polite">
+        <div><div class="spinner" role="status"></div><p class="sr-only" data-i18n="common.loading">Loading…</p></div>
+      </section>
+
+      <section id="view-notfound" class="center-screen" hidden>
+        <div>
+          <h1 data-i18n="pay.notFound.title">Page not found</h1>
+          <p class="muted" data-i18n="pay.notFound.body">This page doesn't exist or is no longer active.</p>
+          <a class="btn btn-secondary" href="/" data-i18n="pay.home">Go to the home page</a>
+        </div>
+      </section>
+
+      <section id="view-amount" hidden>
+        <div class="card pay-card raised">
+          <div class="payee">
+            <div class="avatar" id="payee-initial" aria-hidden="true"></div>
+            <div>
+              <p class="muted small" data-i18n="pay.paying">You're paying</p>
+              <h1 id="payee-name"></h1>
+            </div>
+          </div>
+          <p id="payee-note" class="note" hidden></p>
+          <p id="checkout-off" class="notice warn" hidden data-i18n="pay.unavailable">Payments are temporarily unavailable. Please try again later.</p>
+          <form id="amount-form" novalidate>
+            <div class="field">
+              <label for="amount" data-i18n="pay.amountLabel">Amount (USD)</label>
+              <div class="amount-input"><span aria-hidden="true">$</span><input id="amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-describedby="amount-hint amount-error"></div>
+              <p id="amount-hint" class="hint"></p>
+              <p id="amount-error" class="error" role="alert" hidden></p>
+            </div>
+            <div id="chips" class="chips"></div>
+            <button class="btn btn-primary btn-lg btn-block" id="continue" type="submit" data-i18n="pay.continue">Continue</button>
+          </form>
+          <p class="hint center" data-i18n="pay.final">Paid over Lightning. Payments are final once received.</p>
+        </div>
+      </section>
+
+      <section id="view-invoice" hidden>
+        <div class="card pay-card raised">
+          <div class="invoice-amount">
+            <div class="usd" id="inv-usd"></div>
+            <div class="sats" id="inv-sats"></div>
+          </div>
+          <p class="muted center small" id="inv-payee"></p>
+          <div class="qr" id="inv-qr" aria-label="Lightning invoice QR code"></div>
+          <p class="center muted small" data-i18n="pay.scan">Scan with any Lightning wallet</p>
+          <div class="countdown" id="inv-countdown"><span data-i18n="pay.expiresIn">Expires in</span> <strong id="inv-timer">60:00</strong></div>
+          <div class="pay-actions">
+            <a class="btn btn-primary btn-lg" id="open-deeplink" href="#" rel="noopener" data-i18n="pay.openDeeplink">Open in Cash App</a>
+            <a class="btn btn-secondary" id="open-wallet" href="#" data-i18n="pay.openWallet">Open in wallet</a>
+            <button class="btn btn-ghost" id="copy-invoice" type="button" data-i18n="pay.copy">Copy invoice</button>
+          </div>
+          <div class="status-line" aria-live="polite"><span class="pulse"></span><span id="inv-status" data-i18n="pay.waiting">Waiting for payment…</span></div>
+        </div>
+      </section>
+
+      <section id="view-success" class="center-screen" hidden>
+        <div class="card pay-card raised">
+          <div class="result-icon ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <h1 data-i18n="pay.success.title">Payment received</h1>
+          <div class="invoice-amount"><div class="usd" id="ok-usd"></div></div>
+          <p class="muted" id="ok-body"></p>
+          <p class="receipt"><span data-i18n="pay.receipt">Receipt</span> <span id="ok-receipt"></span></p>
+        </div>
+      </section>
+
+      <section id="view-expired" class="center-screen" hidden>
+        <div class="card pay-card raised">
+          <div class="result-icon bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h1 data-i18n="pay.expired.title">This invoice expired</h1>
+          <p class="muted" data-i18n="pay.expired.body">No payment was made. Create a new one to try again.</p>
+          <button class="btn btn-primary" id="expired-again" type="button" data-i18n="pay.expired.again">Create a new one</button>
+        </div>
+      </section>
+
+      <section id="view-failed" class="center-screen" hidden>
+        <div class="card pay-card raised">
+          <div class="result-icon bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+          <h1 data-i18n="pay.failed.title">Something went wrong</h1>
+          <p class="muted" data-i18n="pay.failed.body">This invoice could not be completed. You were not charged.</p>
+          <button class="btn btn-primary" id="failed-again" type="button" data-i18n="pay.tryAgain">Try again</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site">
+    <div class="container">
+      <span><span data-brand>Boltpage</span> · <span data-i18n="footer.rights">Payments over the Lightning Network.</span></span>
+      <nav><a href="/terms" data-i18n="footer.terms">Terms</a><a href="/privacy" data-i18n="footer.privacy">Privacy</a><a href="/contact" data-i18n="footer.contact">Contact</a></nav>
+    </div>
+  </footer>
+</body>
+</html>

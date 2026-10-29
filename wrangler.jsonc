@@ -1,0 +1,16 @@
+// Static site Worker: serves public/ with extensionless HTML.
+// Unknown paths fall through to public/404.html, which resolves /<slug> and /pay/<slug> client-side.
+{
+  "name": "boltpage-site",
+  "compatibility_date": "2025-10-01",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  // Attach every hostname listed in public.site_domains. Placeholders only.
+  "routes": [
+    { "pattern": "pay.example.com", "custom_domain": true },
+    { "pattern": "pay.example.net", "custom_domain": true }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "boltpage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightning payment links with admin approval, daily settlement and withdrawals.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "config": "node scripts/write-config.mjs",
+    "og:render": "node scripts/render-og.mjs",
+    "dev:mock": "node tests/e2e/mock-server.mjs",
+    "check:copy": "node ci/check_public_copy.mjs",
+    "test:sql": "node ci/run-sql-tests.mjs",
+    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
+    "test:db": "node --test \"tests/db/*.test.mjs\"",
+    "check:deno": "deno check --config supabase/functions/deno.json supabase/functions/*/index.ts",
+    "test:deno": "deno test --config supabase/functions/deno.json --allow-env --allow-read supabase/functions/tests/",
+    "test:e2e": "playwright test",
+    "test": "npm run check:copy && npm run test:unit && npm run test:sql"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.13",
+    "@playwright/test": "^1.64.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "@supabase/supabase-js": "^2.118.0",
+    "deno": "^2.9.6",
+    "pg": "^8.23.1",
+    "qrcode-generator": "^2.0.4"
+  }
+}

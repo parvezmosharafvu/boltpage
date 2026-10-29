@@ -1,0 +1,30 @@
+title = "boltpage gitleaks config"
+
+[extend]
+useDefault = true
+
+# LND macaroons are long hex strings starting with the macaroon magic bytes.
+[[rules]]
+id = "lnd-macaroon-hex"
+description = "LND macaroon (hex)"
+regex = '''0201036c6e64[0-9a-f]{40,}'''
+tags = ["lnd", "macaroon"]
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram bot token"
+regex = '''\b[0-9]{8,10}:AA[0-9A-Za-z_-]{33}\b'''
+tags = ["telegram"]
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret API key"
+regex = '''\bsb_secret_[0-9A-Za-z_-]{20,}\b'''
+tags = ["supabase"]
+
+[allowlist]
+description = "Vendored minified libraries and lockfile"
+paths = [
+  '''public/vendor/.*''',
+  '''package-lock\.json''',
+]

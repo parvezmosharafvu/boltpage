@@ -1,0 +1,16 @@
+// Link-preview Worker. Runs on the same hostnames as the site Worker (as routes, which run
+// before the custom-domain origin). Crawlers get OG HTML; everyone else is passed through.
+{
+  "name": "boltpage-og-preview",
+  "main": "og-preview-worker.js",
+  "compatibility_date": "2025-10-01",
+  "routes": [
+    { "pattern": "pay.example.com/*", "zone_name": "example.com" },
+    { "pattern": "pay.example.net/*", "zone_name": "example.net" }
+  ],
+  "vars": {
+    "SUPABASE_URL": "https://<project-ref>.supabase.co",
+    "BRAND_NAME": "Boltpage"
+  }
+  // SUPABASE_ANON_KEY is public, but set it with `wrangler secret put SUPABASE_ANON_KEY` to keep it out of git.
+}

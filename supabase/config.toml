@@ -1,0 +1,67 @@
+# Local development config for the Supabase CLI. Not a hosted project id.
+project_id = "boltpage"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "http://localhost:8787"
+additional_redirect_urls = ["http://localhost:8787/reset", "http://127.0.0.1:8787/reset"]
+enable_signup = true
+minimum_password_length = 10
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+# Public or secret-authenticated endpoints: the function checks its own credentials.
+[functions.create-invoice]
+verify_jwt = false
+
+[functions.payment-status]
+verify_jwt = false
+
+[functions.lnd-watcher]
+verify_jwt = false
+
+[functions.daily-settlement]
+verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+[functions.telegram-notify]
+verify_jwt = false
+
+[functions.og-image]
+verify_jwt = false
+
+[functions.health]
+verify_jwt = false
+
+# Logged-in endpoints: the gateway verifies the JWT, and the function re-checks role/status.
+[functions.user-withdraw]
+verify_jwt = true
+
+[functions.admin-actions]
+verify_jwt = true
+
+[functions.node-status]
+verify_jwt = true

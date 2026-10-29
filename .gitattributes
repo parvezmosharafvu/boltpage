@@ -1,0 +1,3 @@
+# LF everywhere (CI runs on Linux; SQL, shell snippets and _headers must not get CRLF).
+* text=auto eol=lf
+*.png binary

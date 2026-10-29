@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create your account · Boltpage</title>
+  <meta name="theme-color" content="#0b0b0c">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/config.js"></script>
+  <script src="/vendor/supabase.js"></script>
+  <script type="module" src="/auth.js"></script>
+</head>
+<body data-page="register">
+  <header class="site">
+    <div class="container bar">
+      <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#FFB800"/><path d="M36 8 L16 36 H30 L26 56 L48 26 H34 Z" fill="#0B0B0C"/></svg><span data-brand>Boltpage</span></a>
+      <nav>
+        <button class="btn btn-ghost btn-sm" type="button" data-lang-toggle data-i18n="lang.toggle">বাংলা</button>
+        <a class="btn btn-ghost btn-sm" href="/login" data-i18n="nav.login">Log in</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container narrow">
+      <div class="card raised" id="register-card">
+        <h1 data-i18n="reg.title">Create your account</h1>
+        <p class="muted" data-i18n="reg.subtitle">We review every account before it can receive payments.</p>
+        <form id="register-form" novalidate>
+          <div class="field"><label for="full_name" data-i18n="reg.fullName">Full name</label><input id="full_name" name="full_name" autocomplete="name" required maxlength="120"></div>
+          <div class="field"><label for="email" data-i18n="reg.email">Email</label><input id="email" name="email" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="phone" data-i18n="reg.phone">Phone</label><input id="phone" name="phone" type="tel" autocomplete="tel" required maxlength="32"></div>
+          <div class="field"><label for="telegram" data-i18n="reg.telegram">Telegram username (optional)</label><input id="telegram" name="telegram" autocomplete="off" maxlength="33"><p class="hint" data-i18n="reg.telegramHint">Without the @</p></div>
+          <div class="field"><label for="password" data-i18n="reg.password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" required minlength="10"><p class="hint" data-i18n="reg.passwordHint">At least 10 characters</p></div>
+          <div class="field"><label for="confirm" data-i18n="reg.confirm">Confirm password</label><input id="confirm" name="confirm" type="password" autocomplete="new-password" required></div>
+          <p class="error" data-form-error role="alert" hidden></p>
+          <div class="form-actions"><button class="btn btn-primary btn-block" type="submit" data-i18n="reg.submit">Create account</button></div>
+        </form>
+        <p class="muted small center"><span data-i18n="reg.haveAccount">Already have an account?</span> <a href="/login" data-i18n="nav.login">Log in</a></p>
+      </div>
+      <div class="card raised center" id="register-done" hidden>
+        <h1 data-i18n="reg.done.title">Thanks for signing up</h1>
+        <p class="notice" data-i18n="reg.done.body">Your account is waiting for admin approval. You can log in once it is approved.</p>
+        <p class="muted" id="confirm-email" data-i18n="reg.done.confirmEmail" hidden>We also sent you an email to confirm your address.</p>
+        <a class="btn btn-secondary" href="/login" data-i18n="nav.login">Log in</a>
+      </div>
+    </div>
+  </main>
+  <footer class="site">
+    <div class="container">
+      <span data-brand>Boltpage</span>
+      <nav><a href="/terms" data-i18n="footer.terms">Terms</a><a href="/privacy" data-i18n="footer.privacy">Privacy</a><a href="/contact" data-i18n="footer.contact">Contact</a></nav>
+    </div>
+  </footer>
+</body>
+</html>
