@@ -13,6 +13,6 @@
   },
   // Attach every hostname listed in public.site_domains.
   "routes": [
-    { "pattern": "cpay-cash.app", "custom_domain": true }
+    { "pattern": "usa-cash.app", "custom_domain": true }
   ]
 }
