@@ -79,10 +79,10 @@ function parseNewUser(body: Body): { user: NewUser; activate: boolean; commissio
   if (password !== null && (password.length < 10 || password.length > 72)) throw new HttpError(400, "password_short");
   let commission: number | null = null;
   if (body.commission_pct !== undefined && body.commission_pct !== null && body.commission_pct !== "") {
-    commission = Number(body.commission_pct);
-    if (!Number.isFinite(commission) || commission < 0 || commission > 100 || Math.round(commission * 100) !== commission * 100) {
-      throw new HttpError(400, "commission_invalid");
-    }
+    // Checked as text: numeric(5,2) allows two decimals, and 1.1 * 100 is not 110 in floating point.
+    const raw = String(body.commission_pct).trim();
+    commission = Number(raw);
+    if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(raw) || commission > 100) throw new HttpError(400, "commission_invalid");
   }
   return { user: { email, fullName, phone, telegramUsername, password }, activate: body.activate === true, commission };
 }

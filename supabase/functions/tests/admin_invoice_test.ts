@@ -90,6 +90,20 @@ Deno.test("create_user validates, activates, sets commission and audits", async 
   assertEquals((await handler(post({ action: "create_user", email: "taken@test.local", full_name: "T" }))).status, 409);
 });
 
+Deno.test("create_user takes any commission with up to two decimals (1.1 * 100 is not 110 in floats)", async () => {
+  for (const pct of [1.1, 2.55, 5.1, "0.07", 0, 100]) {
+    const { handler, rpcs } = adminSetup();
+    const res = await handler(post({ action: "create_user", email: "c@test.local", full_name: "C", commission_pct: pct }));
+    assertEquals(res.status, 200, String(pct));
+    assertEquals(rpcs.find(([fn]) => fn === "admin_set_commission")?.[1].p_pct, Number(pct));
+  }
+  for (const pct of [1.234, -1, 100.01, "1e1", "abc", " "]) {
+    const { handler } = adminSetup();
+    const res = await handler(post({ action: "create_user", email: "c@test.local", full_name: "C", commission_pct: pct }));
+    assertEquals(res.status, 400, String(pct));
+  }
+});
+
 Deno.test("issueInvoice passes memo and issuer through and uses the memo in the LND memo", async () => {
   const lndHttp = mockFetch(() => jsonResponse({ r_hash: hexToBase64(HASH_A), payment_request: "lnbc1memo" }));
   const lnd = new LndClient({ restUrl: "https://lnd.example.test", macaroonHex: "0201ab" }, lndHttp.fetchImpl);

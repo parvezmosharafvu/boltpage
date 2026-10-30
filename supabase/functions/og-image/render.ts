@@ -37,6 +37,16 @@ const loadShaper = () =>
 export async function renderLinkCard(displayName: string, note: string | null, brand: string): Promise<Uint8Array<ArrayBuffer>> {
   const [shaper] = await Promise.all([loadShaper(), loadResvg()]);
   const svg = linkCardSvg(shaper, displayName, note, brand);
-  const png = new Resvg(svg, { font: { loadSystemFonts: false }, fitTo: { mode: "width", value: 1200 } }).render().asPng();
-  return new Uint8Array(png);
+  // resvg-wasm 2.6.2 never registers Resvg for finalization, so only free() returns its wasm memory.
+  const resvg = new Resvg(svg, { font: { loadSystemFonts: false }, fitTo: { mode: "width", value: 1200 } });
+  try {
+    const image = resvg.render();
+    try {
+      return new Uint8Array(image.asPng());
+    } finally {
+      image.free();
+    }
+  } finally {
+    resvg.free();
+  }
 }

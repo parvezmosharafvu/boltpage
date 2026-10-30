@@ -68,6 +68,32 @@ test("admin issues an invoice; its link opens straight to the QR and settles", a
   await expect(page.getByRole("heading", { name: "Payment received" })).toBeVisible({ timeout: 10_000 });
 });
 
+test("admin invoice form never keeps the previous user's links", async ({ page }) => {
+  await login(page, "admin@demo.test");
+  await page.goto("/admin#invoices");
+  const user = page.getByLabel("User", { exact: true }).first();
+  const link = page.getByLabel("Payment link");
+  await user.selectOption({ label: "Rahim Uddin · seller@demo.test" });
+  await expect(link).toBeEnabled();
+
+  // Hold the next links response so it lands after the admin has moved on.
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  const isLinks = (url) => new URL(url).pathname.endsWith("/rest/v1/payment_links");
+  await page.route(isLinks, async (route) => (await held, route.continue()));
+
+  await user.selectOption({ index: 0 });
+  await expect(link).toBeDisabled(); // dropped at once
+  await user.selectOption({ label: "Rahim Uddin · seller@demo.test" });
+  await expect(link).toBeDisabled(); // still loading
+  await user.selectOption({ index: 0 });
+  const late = page.waitForResponse((res) => isLinks(res.url()));
+  release();
+  await late;
+  await expect(link).toBeDisabled(); // the late response for the old pick is ignored
+  await expect(link.locator("option")).toHaveText(["Choose a user first"]);
+});
+
 test("invoice link with the wrong slug is a neutral 404", async ({ page, request }) => {
   const res = await request.post("/__mock/functions/v1/create-invoice", { data: { slug: "demo", amount_usd: "20" } });
   const { payment_id } = await res.json();

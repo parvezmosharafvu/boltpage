@@ -367,9 +367,18 @@ async function createInvoiceCard(onCreated) {
   const err = errorBox();
   const result = h("div");
   let links = [];
+  let pick = 0;
 
   user.addEventListener("change", async () => {
+    // Drop the previous user's links at once (the invoice goes to whoever owns link_id), and
+    // ignore a response that arrives after the admin picked someone else.
+    const seq = ++pick;
+    links = [];
+    link.disabled = true;
+    fill(link, h("option", { value: "" }, user.value ? "Loading…" : "Choose a user first"));
+    if (!user.value) return;
     const { data } = await db().from("payment_links").select("id, slug, display_name, is_active, disabled_by_admin, min_usd, max_usd").eq("user_id", user.value).order("created_at");
+    if (seq !== pick) return;
     links = (data ?? []).filter((l) => l.is_active && !l.disabled_by_admin);
     fill(link, links.length ? links.map((l) => h("option", { value: l.id }, `/${l.slug} · ${l.display_name}`)) : h("option", { value: "" }, "No active links"));
     link.disabled = !links.length;
@@ -389,7 +398,7 @@ async function createInvoiceCard(onCreated) {
     e.preventDefault();
     err.hidden = true;
     const cents = parseAmountCents(amount.value);
-    if (!link.value) return showError(err, { code: "link_not_found" });
+    if (!links.some((l) => l.id === link.value)) return showError(err, { code: "link_not_found" });
     if (cents === null || cents <= 0) return showError(err, { code: "amount_invalid" });
     try {
       const inv = await callFunction("admin-actions", {
