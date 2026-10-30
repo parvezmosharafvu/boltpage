@@ -12,6 +12,9 @@ const OG_TEMPLATE_VERSION = "1";
 export const HOME_IMAGE = "/assets/og/og-home-v1.png";
 export const DEFAULT_IMAGE = "/assets/og/og-default-v1.png";
 const DEFAULT_DESCRIPTION = "Pay securely in seconds with any Lightning wallet.";
+const UPSTREAM_TIMEOUT_MS = 8000;
+// public/_headers only applies to static-asset responses, so responses built here carry their own.
+const BASE_HEADERS = { "X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin" };
 
 export function isCrawler(userAgent) {
   return CRAWLER_RE.test(userAgent ?? "");
@@ -49,14 +52,17 @@ export function ogHtml({ title, description, url, image, siteName }) {
 </html>`;
 }
 
-function htmlResponse(body, status = 200) {
+function htmlResponse(body, status = 200, cacheControl = "public, max-age=300") {
   return new Response(body, {
     status,
     headers: {
+      ...BASE_HEADERS,
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "public, max-age=300",
+      "Cache-Control": cacheControl,
+      // People get the checkout page at the same URL, so shared caches must key on the user agent.
+      Vary: "User-Agent",
+      "Content-Security-Policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       "X-Robots-Tag": "noindex",
-      "X-Content-Type-Options": "nosniff",
     },
   });
 }
@@ -73,8 +79,10 @@ async function lookupLink(env, slug, hostname) {
     method: "POST",
     headers: apiHeaders(env),
     body: JSON.stringify({ p_slug: slug, p_hostname: hostname }),
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
-  if (!res.ok) return null;
+  // An outage must not look like "no such link": crawlers keep previews for days.
+  if (!res.ok) throw new Error(`public_link_by_slug -> ${res.status}`);
   const rows = await res.json();
   return Array.isArray(rows) ? rows[0] ?? null : null;
 }
@@ -85,12 +93,20 @@ async function ogImage(request, env, ctx, slug, version) {
   const hit = await cache.match(key);
   if (hit) return hit;
 
-  const upstream = await fetch(`${env.SUPABASE_URL}/functions/v1/og-image?slug=${slug}&v=${version}`);
-  if (!upstream.ok || !(upstream.headers.get("content-type") ?? "").startsWith("image/png")) {
-    return fetch(new URL(DEFAULT_IMAGE, request.url));
+  const upstream = await fetch(`${env.SUPABASE_URL}/functions/v1/og-image?slug=${slug}&v=${version}`, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  }).catch((err) => console.error("og-image fetch failed", String(err)));
+  if (!upstream?.ok || !(upstream.headers.get("content-type") ?? "").startsWith("image/png")) {
+    // The default card, cached briefly and never stored under this URL, so the real card shows up
+    // once the function recovers (the static asset's own headers would mark it immutable).
+    const fallback = await fetch(new URL(DEFAULT_IMAGE, request.url));
+    return new Response(fallback.body, {
+      status: fallback.status,
+      headers: { ...BASE_HEADERS, "Content-Type": "image/png", "Cache-Control": "public, max-age=300" },
+    });
   }
   const res = new Response(upstream.body, {
-    headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=31536000, immutable" },
+    headers: { ...BASE_HEADERS, "Content-Type": "image/png", "Cache-Control": "public, max-age=31536000, immutable" },
   });
   ctx.waitUntil(cache.put(key, res.clone()));
   return res;
@@ -120,7 +136,19 @@ export default {
     const slug = slugFromPath(url.pathname);
     if (!slug) return fetch(request); // static pages and assets
 
-    const link = await lookupLink(env, slug, url.hostname);
+    let link;
+    try {
+      link = await lookupLink(env, slug, url.hostname);
+    } catch (err) {
+      console.error("link lookup failed", String(err));
+      return htmlResponse(ogHtml({
+        title: "Payment link",
+        description: DEFAULT_DESCRIPTION,
+        url: url.origin + url.pathname,
+        image: url.origin + DEFAULT_IMAGE,
+        siteName: brand,
+      }), 200, "no-store");
+    }
     if (!link) {
       return htmlResponse(ogHtml({
         title: "Page not found",

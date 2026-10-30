@@ -77,6 +77,8 @@ Deno.test("creates a public, 3600 s invoice and records hash, sats and rate", as
     bolt11: "lnbc1ptestinvoice",
     expirySeconds: 3600,
     domain: "pay.example.com",
+    memo: null,
+    issuedBy: null,
   }]);
 });
 

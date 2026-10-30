@@ -34,13 +34,36 @@ The 19:05 job regenerates cycle D and D−1. For older cycles run Admin → Sett
   users blocked the bot (expected; they can reconnect).
 - Re-register with **Register webhook** after rotating `TELEGRAM_WEBHOOK_SECRET`.
 
+### Sending someone a fixed-amount invoice
+Admin → Invoices → *Create invoice*: pick the user, their link, the amount and an optional note, and the
+domain the link should use. Copy the link and send it; it opens straight to the QR and expires in 1 hour.
+Cancel unpaid ones from *Open invoices*. If the payer paid seconds before you cancelled, it is recorded as
+settled instead.
+
+### Paying out statements
+Admin → Invoices → *Daily statements*, filter *Outstanding (closed)*. *Mark paid out* needs the transfer
+reference; *Reopen* (with a reason) if a payout bounced. Everything is in the audit log.
+
+### Admin locked out by two-factor
+Switching on `admin_require_mfa` is refused unless your current session is verified with a code, so this
+should not happen. If an admin loses their authenticator: another admin can't remove factors from the UI.
+Run in the SQL editor (as `postgres`):
+`update public.app_settings set value = 'false' where key = 'admin_require_mfa';`, then have them delete the
+factor in Supabase → Authentication → Users → (user) → MFA, sign in, and re-enroll in Dashboard → Settings.
+
+### Adding a user without the signup form
+Admin → Users → *Create user*. Leave the password empty to email them a set-password link (sent only when
+you are on an active site domain); tick *Activate now* to skip approval.
+
 ### Abuse report on a link
 Admin → Links → **Disable** (reason required). For the account: Admin → Users → **Suspend**. Both are audited,
 take effect immediately on every domain and for crawlers.
 
 ## Adding a custom domain
 1. Cloudflare: add the hostname as a custom domain of `boltpage-site` (`wrangler.jsonc` routes) and as a
-   route of `boltpage-og-preview` (`worker/wrangler.jsonc`), then deploy both.
+   route of `boltpage-og-preview` (`worker/wrangler.jsonc`), then deploy both, site first: the custom
+   domain creates the proxied DNS record and certificate that the route needs. The hostname must not
+   already have a CNAME record.
 2. Supabase Auth → URL configuration: add `https://<host>/reset` and `https://<host>/login` to redirect URLs.
 3. Admin → Domains → add the hostname (active). Links now work there; unknown hosts keep showing 404.
 

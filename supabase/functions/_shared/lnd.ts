@@ -42,6 +42,11 @@ export function base64ToHex(b64: string): string {
   return Array.from(bin, (c) => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
 }
 
+export function hexToBase64(hex: string): string {
+  const bytes = hex.match(/../g)?.map((b) => parseInt(b, 16)) ?? [];
+  return btoa(String.fromCharCode(...bytes));
+}
+
 export class LndClient {
   readonly #base: string;
   readonly #cfg: LndConfig;
@@ -135,6 +140,14 @@ export class LndClient {
       if (err instanceof LndError && err.notFound) return null;
       throw err;
     }
+  }
+
+  // Cancels an OPEN invoice (invoicesrpc.CancelInvoice; needs invoices:write).
+  async cancelInvoice(paymentHashHex: string): Promise<void> {
+    if (!/^[0-9a-f]{64}$/.test(paymentHashHex)) {
+      throw new LndError("payment hash must be 64 lowercase hex chars");
+    }
+    await this.#request("POST", "/v2/invoices/cancel", { payment_hash: hexToBase64(paymentHashHex) });
   }
 
   // deno-lint-ignore no-explicit-any

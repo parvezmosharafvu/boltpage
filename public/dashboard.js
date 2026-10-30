@@ -1,13 +1,16 @@
 // Logged-in user dashboard (active accounts only; enforced in SQL, explained by the gate).
 import { onLangChange, t } from "./i18n.js";
-import { formatUsd, h, parseAmountCents, parseQuickAmounts, receiptId, svg, toCsv } from "./core.js";
-import { callFunction, errorText, getClient, requireActive, rpc, signOut } from "./auth.js";
-import { badge, copyText, downloadFile, field, fill, fmtDate, fmtDateTime, showDialog, stat, table, tabs, toast } from "./ui.js";
+import { formatUsd, h, parseAmountCents, parseQuickAmounts, receiptId, toCsv } from "./core.js";
+import { callFunction, enhancePasswords, errorText, getClient, requireActive, rpc, signOut } from "./auth.js";
+import {
+  badge, barChart, copyText, dailyPoints, downloadFile, field, fill, fmtDate, fmtDateTime, showDialog, stat, successRate,
+  table, tabs, toast,
+} from "./ui.js";
 import { isValidSlug } from "./slug-rules.js";
 
 const app = document.getElementById("app");
 const db = () => getClient();
-const TABS = ["overview", "links", "payments", "statements", "withdrawals", "settings"];
+const TABS = ["overview", "links", "payments", "reports", "statements", "withdrawals", "settings"];
 const state = { profile: null, config: null, domains: [] };
 
 document.getElementById("logout").addEventListener("click", signOut);
@@ -300,33 +303,94 @@ async function renderPayments(panel) {
 }
 
 // ---------------------------------------------------------------------------
+// Reports: one Dhaka calendar month at a time
+// ---------------------------------------------------------------------------
+function currentMonth() {
+  return new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 7); // Asia/Dhaka is UTC+6, no DST
+}
+
+async function renderReports(panel) {
+  const month = h("input", { type: "month", value: currentMonth(), max: currentMonth() });
+  const body = h("div", { class: "stack" });
+
+  const load = async () => {
+    fill(body, h("div", { class: "spinner" }));
+    const rep = await rpc("my_report", { p_month: `${month.value || currentMonth()}-01` });
+    const totals = rep.totals;
+    const { finished, rate } = successRate(rep.attempts);
+    const first = rep.month;
+    const last = new Date(Date.UTC(+first.slice(0, 4), +first.slice(5, 7), 0)).toISOString().slice(0, 10);
+    const byDate = new Map((rep.daily ?? []).map((d) => [d.cycle_date, Number(d.net_usd)]));
+    const lastDaily = (rep.daily ?? []).at(-1)?.cycle_date;
+    const points = dailyPoints(first, lastDaily && lastDaily > last ? lastDaily : last, byDate);
+
+    fill(
+      body,
+      h(
+        "div",
+        { class: "grid cols-4" },
+        stat(t("rep.gross"), formatUsd(totals.gross_usd), t("rep.paidCount", { n: totals.count })),
+        stat(t("rep.commission"), formatUsd(totals.commission_usd)),
+        stat(t("rep.net"), formatUsd(totals.net_usd)),
+        stat(t("rep.successRate"), rate === null ? "—" : `${rate}%`, t("rep.successSub", { paid: rep.attempts.settled, total: finished })),
+      ),
+      h(
+        "div",
+        { class: "card stack" },
+        h("h3", {}, t("rep.attempts")),
+        h("div", { class: "attempts" }, ["settled", "pending", "expired", "failed"].map((s) => h("span", { class: `badge ${s}` }, `${t(`status.${s}`)}: ${rep.attempts[s]}`))),
+      ),
+      h("div", { class: "card" }, h("h3", {}, t("rep.daily")), barChart(points, { label: t("rep.daily"), format: formatUsd })),
+      h(
+        "div",
+        { class: "grid cols-2" },
+        h(
+          "div",
+          { class: "stack" },
+          h("h3", {}, t("rep.topLinks")),
+          table(
+            [
+              { label: t("col.link"), value: (l) => `/${l.slug}` },
+              { label: t("col.count"), value: (l) => String(l.count), num: true },
+              { label: t("col.gross"), value: (l) => formatUsd(l.gross_usd), num: true },
+              { label: t("col.net"), value: (l) => formatUsd(l.net_usd), num: true },
+            ],
+            rep.top_links ?? [],
+            { empty: t("rep.empty") },
+          ),
+        ),
+        h(
+          "div",
+          { class: "stack" },
+          h("h3", {}, t("rep.recent")),
+          table(
+            [
+              { label: t("col.date"), value: (p) => fmtDateTime(p.settled_at) },
+              { label: t("col.link"), value: (p) => `/${p.slug}` },
+              { label: t("col.amount"), value: (p) => formatUsd(p.amount_usd), num: true },
+              { label: t("col.receipt"), value: (p) => h("span", { class: "mono" }, receiptId(p.id)) },
+            ],
+            rep.recent ?? [],
+            { empty: t("rep.empty") },
+          ),
+        ),
+      ),
+    );
+  };
+
+  month.addEventListener("change", () => load().catch((err) => fill(body, h("p", { class: "notice bad" }, errorText(err)))));
+  fill(panel, h("div", { class: "row" }, field(t("rep.month"), month)), body);
+  await load();
+}
+
+// ---------------------------------------------------------------------------
 // Statements: 30-day chart, top links, daily rows with detail
 // ---------------------------------------------------------------------------
 function earningsChart(rows) {
   const byDate = new Map(rows.map((r) => [r.cycle_date, Number(r.net_usd)]));
-  const latest = rows[0]?.cycle_date ? new Date(`${rows[0].cycle_date}T00:00:00Z`) : new Date();
-  const days = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(latest.getTime() - (29 - i) * 86_400_000).toISOString().slice(0, 10);
-    return { date: d, net: byDate.get(d) ?? 0 };
-  });
-  const max = Math.max(1, ...days.map((d) => d.net));
-  const W = 600, H = 180, bw = W / days.length;
-  // Bars stretch with the card width; labels stay in HTML so they never distort.
-  return h(
-    "div",
-    {},
-    h("p", { class: "hint" }, `max ${formatUsd(max)}`),
-    svg(
-      "svg",
-      { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": t("st.chart"), preserveAspectRatio: "none" },
-      days.map((d, i) => {
-        const bh = d.net > 0 ? Math.max(2, (d.net / max) * (H - 4)) : 2;
-        return svg("rect", { class: d.net > 0 ? "bar" : "bar zero", x: i * bw + 1, y: H - bh, width: bw - 2, height: bh },
-          svg("title", {}, `${fmtDate(d.date)}: ${formatUsd(d.net)}`));
-      }),
-    ),
-    h("div", { class: "row between hint" }, h("span", {}, fmtDate(days[0].date)), h("span", {}, fmtDate(days[29].date))),
-  );
+  const latest = rows[0]?.cycle_date ?? new Date().toISOString().slice(0, 10);
+  const from = new Date(new Date(`${latest}T00:00:00Z`).getTime() - 29 * 86_400_000).toISOString().slice(0, 10);
+  return barChart(dailyPoints(from, latest, byDate), { label: t("st.chart"), format: formatUsd });
 }
 
 async function statementDetail(row) {
@@ -530,8 +594,88 @@ async function renderWithdrawals(panel) {
   );
 }
 
+// Two-factor setup (TOTP). Enrolling verifies a code, which also upgrades this session to aal2.
+function mfaCard() {
+  const box = h("div", { class: "card stack" });
+
+  const draw = async () => {
+    const { data } = await db().auth.mfa.listFactors();
+    const verified = data?.totp ?? [];
+    if (verified.length) {
+      fill(
+        box,
+        h("h3", {}, t("mfa.title")),
+        h("p", {}, h("span", { class: "badge active" }, t("mfa.on")), " ", t("mfa.enabled")),
+        h("button", {
+          class: "btn btn-secondary btn-sm",
+          type: "button",
+          onclick: async () => {
+            const { error } = await db().auth.mfa.unenroll({ factorId: verified[0].id });
+            if (error) return toast(error.message);
+            toast(t("mfa.disabled"));
+            draw();
+          },
+        }, t("mfa.disable")),
+      );
+    } else {
+      fill(
+        box,
+        h("h3", {}, t("mfa.title")),
+        h("p", {}, h("span", { class: "badge" }, t("mfa.off")), " ", h("span", { class: "muted" }, t("mfa.intro"))),
+        h("button", { class: "btn btn-primary btn-sm", type: "button", onclick: () => enroll().catch((e) => toast(errorText(e))) }, t("mfa.setup")),
+      );
+    }
+  };
+
+  const enroll = async () => {
+    // Drop half-finished setups first, otherwise enroll can conflict.
+    const { data: existing } = await db().auth.mfa.listFactors();
+    for (const f of (existing?.all ?? []).filter((x) => x.status !== "verified")) {
+      await db().auth.mfa.unenroll({ factorId: f.id });
+    }
+    const { data, error } = await db().auth.mfa.enroll({ factorType: "totp", friendlyName: `Authenticator ${new Date().toISOString().slice(0, 16)}` });
+    if (error) return toast(error.message);
+    // supabase-js prefixes the raw SVG without URL-encoding it; a "#" in the SVG would cut the
+    // data URL short, so rebuild it encoded.
+    const qr = String(data.totp.qr_code ?? "");
+    const svgText = qr.replace(/^data:image\/svg\+xml;(?:charset=)?utf-?8,/i, "");
+    const src = svgText.startsWith("<") ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}` : qr;
+    const code = h("input", { inputmode: "numeric", autocomplete: "one-time-code", maxlength: 6 });
+    const err = errorBox();
+    const form = h(
+      "form",
+      { class: "stack", novalidate: true },
+      field(t("mfa.code"), code),
+      err,
+      h("div", { class: "row" },
+        h("button", { class: "btn btn-primary btn-sm", type: "submit" }, t("mfa.verify")),
+        h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: draw }, t("common.cancel"))),
+    );
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      const { error: verifyError } = await db().auth.mfa.challengeAndVerify({ factorId: data.id, code: code.value.replace(/\s/g, "") });
+      if (verifyError) return showError(err, { code: "mfa_invalid" });
+      toast(t("mfa.enabled"));
+      draw();
+    });
+    fill(
+      box,
+      h("h3", {}, t("mfa.title")),
+      h("p", { class: "muted small" }, t("mfa.scan")),
+      h("img", { class: "mfa-qr", src, alt: "", width: 200, height: 200 }),
+      h("p", { class: "small" }, `${t("mfa.secret")}: `, h("span", { class: "mono" }, data.totp.secret)),
+      form,
+    );
+    code.focus();
+  };
+
+  draw().catch((e) => fill(box, h("p", { class: "error" }, errorText(e))));
+  return box;
+}
+
 // ---------------------------------------------------------------------------
-// Settings: profile, notifications, password, Telegram
+// Settings: profile, notifications, password, two-factor, Telegram
 // ---------------------------------------------------------------------------
 async function renderSettings(panel) {
   const p = state.profile;
@@ -631,6 +775,7 @@ async function renderSettings(panel) {
       h(
         "div",
         { class: "stack" },
+        mfaCard(),
         h("div", { class: "card stack" }, h("h3", {}, t("set.telegram")), tgBox),
         h(
           "form",
@@ -643,6 +788,7 @@ async function renderSettings(panel) {
       ),
     ),
   );
+  enhancePasswords(panel);
 }
 
 // ---------------------------------------------------------------------------
@@ -652,6 +798,7 @@ const RENDER = {
   overview: renderOverview,
   links: renderLinks,
   payments: renderPayments,
+  reports: renderReports,
   statements: renderStatements,
   withdrawals: renderWithdrawals,
   settings: renderSettings,

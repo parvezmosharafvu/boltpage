@@ -21,13 +21,15 @@ npm run dev:mock          # http://localhost:8787 with a fake Supabase + fake in
 ```
 Open `/demo` to pay (then `curl -X POST localhost:8787/__mock/control -d '{"status":"settled"}' -H 'content-type: application/json'`),
 or log in as `seller@demo.test` / `admin@demo.test` with password `demo-password` (mock-only test users).
+In the mock, any authenticator code `123456` verifies two-factor.
 
 ## Tests
 ```bash
 npm test                  # public-copy check + Node unit tests + migrations & SQL tests (PGlite)
 npm run test:deno         # edge functions against a mocked LND   (needs deno, or: npx deno ...)
 npm run check:deno        # deno type-check of every function
-npm run test:e2e          # Playwright checkout tests (npx playwright install chromium, or PW_CHANNEL=msedge)
+npm run og:preview        # render sample per-link OG cards (incl. Bangla) to test-results/og/
+npm run test:e2e          # Playwright: checkout + dashboard/admin/2FA flows (npx playwright install chromium, or PW_CHANNEL=msedge)
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres npm run test:sql && npm run test:db
                           # real Postgres + two-connection concurrency tests (what CI runs)
 ```

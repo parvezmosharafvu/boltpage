@@ -109,7 +109,7 @@ function publicLink(slug) {
   return { slug, display_name: link.display_name, note: link.note, min_usd: min, max_usd: max, quick_amounts: link.quick_amounts.filter((q) => q >= min && q <= max), og_version: 1, checkout_enabled: true };
 }
 
-function createInvoice(body) {
+function createInvoice(body, issuedBy = null) {
   const link = publicLink(String(body.slug ?? ""));
   if (!link) return [404, { error: "link_not_found" }];
   if (!link.checkout_enabled) return [503, { error: "checkout_disabled" }];
@@ -121,31 +121,56 @@ function createInvoice(body) {
   const sats = Math.round((amount / 66666.67) * 1e8);
   const id = randomUUID();
   const bolt11 = `lnbc${Math.round(sats / 10)}n1p${randomBytes(120).toString("hex").replace(/[^a-z0-9]/g, "").slice(0, 220)}`;
-  invoices.set(id, { status: "pending", amount_usd: amount.toFixed(2), settled_at: null });
+  const expires_at = iso(Date.now() + 3600e3);
+  const memo = typeof body.memo === "string" && body.memo.trim() ? body.memo.trim().slice(0, 140) : null;
+  invoices.set(id, { status: "pending", amount_usd: amount.toFixed(2), settled_at: null, bolt11, amount_sats: sats, expires_at, memo, slug: link.slug, display_name: link.display_name });
+  const owner = db.payment_links.find((l) => l.slug === link.slug);
+  if (owner) {
+    db.payments.unshift({ id, link_id: owner.id, user_id: owner.user_id, amount_usd: amount, amount_sats: sats, btc_usd_rate: 66666.67, commission_pct: 5, commission_usd: +(amount * 0.05).toFixed(2), net_usd: +(amount * 0.95).toFixed(2), status: "pending", created_at: iso(Date.now()), settled_at: null, expires_at, memo, issued_by: issuedBy, domain: "localhost" });
+  }
   lastInvoiceId = id;
-  return [200, { payment_id: id, bolt11, amount_usd: amount.toFixed(2), amount_sats: sats, expires_at: iso(Date.now() + 3600e3) }];
+  return [200, { payment_id: id, bolt11, amount_usd: amount.toFixed(2), amount_sats: sats, expires_at }];
+}
+
+function setPaymentStatus(id, status) {
+  const inv = invoices.get(id);
+  if (inv) {
+    inv.status = status;
+    if (status === "settled") inv.settled_at = iso(Date.now());
+  }
+  const p = db.payments.find((x) => x.id === id);
+  if (p) {
+    p.status = status;
+    if (status === "settled") p.settled_at = iso(Date.now());
+  }
+  return Boolean(inv || p);
 }
 
 // ---------------------------------------------------------------------------
-// Fake auth: unsigned JWT-shaped tokens carrying the user id
+// Fake auth: unsigned JWT-shaped tokens carrying the user id and aal. TOTP code "123456"
+// verifies any factor.
 // ---------------------------------------------------------------------------
+const factors = new Map(); // userId -> [{ id, status }]
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
-function session(user) {
+function session(user, aal = "aal1") {
   const exp = Math.floor(Date.now() / 1000) + 3600;
-  const token = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: user.id, role: "authenticated", aal: "aal1", exp, email: user.email })}.mock`;
-  return { access_token: token, token_type: "bearer", expires_in: 3600, expires_at: exp, refresh_token: `refresh-${user.id}`, user: authUser(user) };
+  const amr = [{ method: "password", timestamp: exp - 3600 }, ...(aal === "aal2" ? [{ method: "totp", timestamp: exp - 3600 }] : [])];
+  const token = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: user.id, role: "authenticated", aal, amr, exp, email: user.email, session_id: user.id })}.mock`;
+  return { access_token: token, token_type: "bearer", expires_in: 3600, expires_at: exp, refresh_token: `refresh-${user.id}-${aal}`, user: authUser(user) };
 }
 function authUser(p) {
-  return { id: p.id, aud: "authenticated", role: "authenticated", email: p.email, email_confirmed_at: p.created_at, app_metadata: { provider: "email" }, user_metadata: {}, created_at: p.created_at };
+  const f = (factors.get(p.id) ?? []).map((x) => ({ id: x.id, factor_type: "totp", status: x.status, friendly_name: "Authenticator", created_at: p.created_at, updated_at: p.created_at }));
+  return { id: p.id, aud: "authenticated", role: "authenticated", email: p.email, email_confirmed_at: p.created_at, app_metadata: { provider: "email" }, user_metadata: {}, factors: f, created_at: p.created_at };
 }
-function callerId(req) {
+function claims(req) {
   const token = /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1] ?? "";
   try {
-    return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).sub ?? null;
+    return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
   } catch {
-    return null;
+    return {};
   }
 }
+const callerId = (req) => claims(req).sub ?? null;
 
 // ---------------------------------------------------------------------------
 // Fake PostgREST: RLS-like ownership filter + eq filters + embeds
@@ -182,7 +207,7 @@ function balance(uid) {
   return { settled_net_usd: +settled.toFixed(2), withdrawn_usd: withdrawn, available_usd: +(settled - withdrawn).toFixed(2) };
 }
 
-function rpc(name, args, uid) {
+function rpc(name, args, uid, claimsAal) {
   const me = db.profiles.find((p) => p.id === uid);
   const active = me?.account_status === "active";
   const notActive = [400, { code: "P0001", message: "account_not_active" }];
@@ -232,6 +257,74 @@ function rpc(name, args, uid) {
     }
     case "admin_run_daily_settlement":
       return [200, 1];
+    case "admin_overview": {
+      if (me?.role !== "admin") return [400, { code: "42501", message: "not_authorized" }];
+      const settled = db.payments.filter((p) => p.status === "settled");
+      const sum = (rows, k) => +rows.reduce((s, p) => s + Number(p[k]), 0).toFixed(2);
+      const block = (rows) => ({ count: rows.length, gross_usd: sum(rows, "amount_usd"), commission_usd: sum(rows, "commission_usd"), net_usd: sum(rows, "net_usd") });
+      const c = cycleDate(Date.now());
+      const monthStart = `${c.slice(0, 7)}-01`;
+      const month = db.payments.filter((p) => p.created_at.slice(0, 10) >= monthStart);
+      const byCycle = new Map();
+      for (const p of settled) {
+        const d = cycleDate(Date.parse(p.settled_at));
+        byCycle.set(d, (byCycle.get(d) ?? 0) + p.amount_usd);
+      }
+      return [200, {
+        cycle_date: c, cycle_start: bounds(c).cycle_start, month_start: monthStart,
+        today: block(settled.filter((p) => p.settled_at >= bounds(c).cycle_start)),
+        month: block(settled.filter((p) => p.settled_at.slice(0, 10) >= monthStart)),
+        all_time: block(settled),
+        payable_usd: +(sum(settled, "net_usd") - db.withdrawals.filter((w) => w.status === "paid").reduce((s, w) => s + w.amount_usd, 0)).toFixed(2),
+        withdrawals_open: { count: db.withdrawals.filter((w) => ["requested", "approved"].includes(w.status)).length, amount_usd: db.withdrawals.filter((w) => ["requested", "approved"].includes(w.status)).reduce((s, w) => s + w.amount_usd, 0) },
+        attempts_month: Object.fromEntries(["settled", "expired", "failed", "pending"].map((s) => [s, month.filter((p) => p.status === s).length])),
+        users: { active: db.profiles.filter((p) => p.account_status === "active").length, pending: db.profiles.filter((p) => p.account_status === "pending").length, blocked: 0 },
+        links: { active: db.payment_links.filter((l) => l.is_active && !l.disabled_by_admin).length, total: db.payment_links.length },
+        outstanding_statements: { count: db.daily_invoices.filter((d) => d.status === "closed").length, net_usd: sum(db.daily_invoices.filter((d) => d.status === "closed"), "net_usd") },
+        outstanding_invoices: { count: db.payments.filter((p) => p.status === "pending").length, amount_usd: sum(db.payments.filter((p) => p.status === "pending"), "amount_usd") },
+        daily: [...byCycle].map(([cycle_date, gross_usd]) => ({ cycle_date, count: 1, gross_usd, commission_usd: gross_usd * 0.05 })),
+        top_users: [{ user_id: U.seller, email: "seller@demo.test", full_name: "Rahim Uddin", count: settled.length, gross_usd: sum(settled, "amount_usd"), commission_usd: sum(settled, "commission_usd") }],
+      }];
+    }
+    case "my_report": {
+      if (!active) return notActive;
+      const month = String(args.p_month ?? cycleDate(Date.now())).slice(0, 7);
+      const mine = db.payments.filter((p) => p.user_id === uid && p.created_at.slice(0, 7) === month);
+      const paid = mine.filter((p) => p.status === "settled");
+      const sum = (rows, k) => +rows.reduce((s, p) => s + Number(p[k]), 0).toFixed(2);
+      const byCycle = new Map();
+      for (const p of paid) {
+        const d = cycleDate(Date.parse(p.settled_at));
+        byCycle.set(d, (byCycle.get(d) ?? 0) + p.net_usd);
+      }
+      const slugOf = (p) => db.payment_links.find((l) => l.id === p.link_id)?.slug;
+      return [200, {
+        month: `${month}-01`,
+        totals: { count: paid.length, gross_usd: sum(paid, "amount_usd"), commission_usd: sum(paid, "commission_usd"), net_usd: sum(paid, "net_usd") },
+        attempts: Object.fromEntries(["settled", "expired", "failed", "pending"].map((s) => [s, mine.filter((p) => p.status === s).length])),
+        daily: [...byCycle].sort().map(([cycle_date, net_usd]) => ({ cycle_date, count: 1, gross_usd: net_usd / 0.95, net_usd })),
+        top_links: db.payment_links.filter((l) => l.user_id === uid).map((l) => { const ps = paid.filter((p) => p.link_id === l.id); return { slug: l.slug, display_name: l.display_name, count: ps.length, gross_usd: sum(ps, "amount_usd"), net_usd: sum(ps, "net_usd") }; }),
+        recent: paid.slice(0, 10).map((p) => ({ id: p.id, settled_at: p.settled_at, amount_usd: p.amount_usd, net_usd: p.net_usd, slug: slugOf(p), memo: p.memo ?? null })),
+      }];
+    }
+    case "admin_update_statement": {
+      const d = db.daily_invoices.find((x) => x.id === args.p_statement);
+      if (!d) return [400, { code: "P0001", message: "not_found" }];
+      if (args.p_status === "paid_out" && !args.p_reference) return [400, { code: "P0001", message: "reference_required" }];
+      if (args.p_status) d.status = args.p_status;
+      if (args.p_reference) d.payout_reference = args.p_reference;
+      if (args.p_note) d.admin_note = args.p_note;
+      return [200, d];
+    }
+    case "admin_create_statement":
+      return [200, { id: randomUUID(), user_id: args.p_user, cycle_date: args.p_cycle_date, payment_count: 0, gross_usd: 0, commission_usd: 0, net_usd: 0, status: "closed" }];
+    case "admin_set_setting": {
+      if (args.p_key === "admin_require_mfa" && args.p_value === true && claimsAal !== "aal2") return [400, { code: "P0001", message: "mfa_required_first" }];
+      const row = db.app_settings.find((s) => s.key === args.p_key);
+      if (row) row.value = args.p_value;
+      else db.app_settings.push({ key: args.p_key, value: args.p_value });
+      return [200, { key: args.p_key, value: args.p_value }];
+    }
     case "create_telegram_link_code":
       return [200, [{ code: "c0ffee".repeat(4), deeplink: `https://t.me/${setting("telegram_bot_username")}?start=${"c0ffee".repeat(4)}`, expires_at: iso(Date.now() + 900e3) }]];
     case "update_my_profile": {
@@ -270,11 +363,9 @@ async function handleMock(req, res, url) {
   const uid = callerId(req);
 
   if (path === "/control" && req.method === "POST") {
-    const inv = invoices.get(body.payment_id ?? lastInvoiceId);
-    if (!inv) return send(res, 404, { error: "no invoice" });
-    inv.status = body.status;
-    if (body.status === "settled") inv.settled_at = iso(Date.now());
-    return send(res, 200, { ok: true });
+    return setPaymentStatus(body.payment_id ?? lastInvoiceId, body.status)
+      ? send(res, 200, { ok: true })
+      : send(res, 404, { error: "no invoice" });
   }
   if (path === "/state") return send(res, 200, { polls, lastInvoiceId, invoices: Object.fromEntries(invoices) });
   if (path === "/reset") {
@@ -290,7 +381,33 @@ async function handleMock(req, res, url) {
   if (path === "/functions/v1/payment-status") {
     polls.push(Date.now());
     const inv = invoices.get(url.searchParams.get("id"));
-    return inv ? send(res, 200, inv) : send(res, 404, { error: "not_found" });
+    return inv ? send(res, 200, { status: inv.status, amount_usd: inv.amount_usd, settled_at: inv.settled_at }) : send(res, 404, { error: "not_found" });
+  }
+  if (path === "/functions/v1/invoice") {
+    const id = url.searchParams.get("id");
+    const inv = invoices.get(id);
+    if (!inv) return send(res, 404, { error: "not_found" });
+    return send(res, 200, { payment_id: id, ...inv, bolt11: inv.status === "pending" ? inv.bolt11 : null });
+  }
+  if (path === "/functions/v1/admin-actions") {
+    const me = db.profiles.find((p) => p.id === uid);
+    if (me?.role !== "admin") return send(res, 403, { error: "not_authorized" });
+    if (body.action === "create_invoice") {
+      const link = db.payment_links.find((l) => l.id === body.link_id);
+      if (!link) return send(res, 404, { error: "link_not_found" });
+      const [status, out] = createInvoice({ slug: link.slug, amount_usd: body.amount_usd, memo: body.memo }, uid);
+      return send(res, status, status === 200 ? { ...out, slug: link.slug } : out);
+    }
+    if (body.action === "cancel_invoice") {
+      return setPaymentStatus(body.payment_id, "expired") ? send(res, 200, { status: "expired" }) : send(res, 404, { error: "not_found" });
+    }
+    if (body.action === "create_user") {
+      if (db.profiles.some((p) => p.email === String(body.email).toLowerCase())) return send(res, 409, { error: "email_taken" });
+      const id = randomUUID();
+      db.profiles.push({ id, email: String(body.email).toLowerCase(), full_name: body.full_name, phone: body.phone, telegram_username: body.telegram_username, telegram_chat_id: null, role: "user", account_status: body.activate ? "active" : "pending", commission_pct: body.commission_pct ?? null, notify_prefs: {}, created_at: iso(Date.now()) });
+      return send(res, 200, { user_id: id, activated: Boolean(body.activate), password_email_sent: !body.password });
+    }
+    return send(res, 200, { ok: true });
   }
   if (path === "/functions/v1/node-status") {
     return send(res, 200, { reachable: true, alias: "demo-node", version: "0.19.x", block_height: 900000, synced_to_chain: true, synced_to_graph: true, num_active_channels: 6, num_inactive_channels: 0, num_pending_channels: 1, num_peers: 9, local_balance_sat: 1250000, inbound_liquidity_sat: 8400000 });
@@ -301,14 +418,42 @@ async function handleMock(req, res, url) {
     const route = path.slice("/auth/v1".length);
     if (route === "/token") {
       const grant = url.searchParams.get("grant_type");
-      const user = grant === "refresh_token"
-        ? db.profiles.find((p) => `refresh-${p.id}` === body.refresh_token)
-        : db.profiles.find((p) => p.email === body.email && body.password === "demo-password");
+      if (grant === "refresh_token") {
+        const m = /^refresh-(.+)-(aal[12])$/.exec(String(body.refresh_token ?? ""));
+        const user = m && db.profiles.find((p) => p.id === m[1]);
+        return user ? send(res, 200, session(user, m[2])) : send(res, 400, { error: "invalid_grant", error_description: "Invalid refresh token" });
+      }
+      const user = db.profiles.find((p) => p.email === body.email && body.password === "demo-password");
       return user ? send(res, 200, session(user)) : send(res, 400, { error: "invalid_grant", error_description: "Invalid login credentials" });
     }
     if (route === "/user") {
       const user = db.profiles.find((p) => p.id === uid);
       return user ? send(res, 200, authUser(user)) : send(res, 401, { message: "invalid token" });
+    }
+    // TOTP: enroll, challenge, verify ("123456"), unenroll.
+    if (route === "/factors" && req.method === "POST") {
+      const id = randomUUID();
+      factors.set(uid, [...(factors.get(uid) ?? []), { id, status: "unverified" }]);
+      const qr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#fff"/><rect x="1" y="1" width="3" height="3"/><rect x="6" y="1" width="3" height="3"/><rect x="1" y="6" width="3" height="3"/><rect x="5" y="5" width="2" height="2"/></svg>`;
+      // Like GoTrue: raw SVG; supabase-js turns it into a data: URL.
+      return send(res, 200, { id, type: "totp", friendly_name: body.friendly_name, totp: { qr_code: qr, secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/demo" } });
+    }
+    const factorRoute = /^\/factors\/([^/]+)(\/challenge|\/verify)?$/.exec(route);
+    if (factorRoute) {
+      const [, fid, action] = factorRoute;
+      const mine = factors.get(uid) ?? [];
+      const factor = mine.find((f) => f.id === fid);
+      if (!factor) return send(res, 404, { code: "mfa_factor_not_found", message: "Factor not found" });
+      if (req.method === "DELETE") {
+        factors.set(uid, mine.filter((f) => f.id !== fid));
+        return send(res, 200, { id: fid });
+      }
+      if (action === "/challenge") return send(res, 200, { id: randomUUID(), type: "totp", expires_at: Math.floor(Date.now() / 1000) + 300 });
+      if (action === "/verify") {
+        if (body.code !== "123456") return send(res, 422, { code: "mfa_verification_failed", message: "Invalid TOTP code entered", error_code: "mfa_verification_failed" });
+        factor.status = "verified";
+        return send(res, 200, session(db.profiles.find((p) => p.id === uid), "aal2"));
+      }
     }
     if (route === "/signup") return send(res, 200, { id: randomUUID(), email: body.email, aud: "authenticated", role: "", user_metadata: body.data ?? {}, identities: [{}] });
     if (route === "/logout") return send(res, 204, "");
@@ -316,7 +461,7 @@ async function handleMock(req, res, url) {
   }
 
   if (path.startsWith("/rest/v1/rpc/")) {
-    const [status, out] = rpc(path.slice("/rest/v1/rpc/".length), body, uid);
+    const [status, out] = rpc(path.slice("/rest/v1/rpc/".length), body, uid, claims(req).aal);
     return send(res, status, out);
   }
   if (path.startsWith("/rest/v1/")) {

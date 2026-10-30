@@ -1,6 +1,6 @@
 // Small UI kit shared by the dashboard and the admin panel.
 import { getLang, t } from "./i18n.js";
-import { h } from "./core.js";
+import { h, svg } from "./core.js";
 
 export function fmtDateTime(iso) {
   if (!iso) return "—";
@@ -62,6 +62,44 @@ export function table(columns, rows, { empty = "—", onRowClick } = {}) {
       ),
     ),
   );
+}
+
+// Daily bars. points: [{ date: "YYYY-MM-DD", value }]. Bars stretch with the card width;
+// labels stay in HTML so they never distort.
+export function barChart(points, { label, format = String } = {}) {
+  if (!points.length) return h("div", { class: "empty" }, "—");
+  const max = Math.max(1, ...points.map((p) => p.value));
+  const W = 600, H = 180, bw = W / points.length;
+  return h(
+    "div",
+    {},
+    h("p", { class: "hint" }, `max ${format(max)}`),
+    svg(
+      "svg",
+      { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": label ?? "", preserveAspectRatio: "none" },
+      points.map((p, i) => {
+        const bh = p.value > 0 ? Math.max(2, (p.value / max) * (H - 4)) : 2;
+        return svg("rect", { class: p.value > 0 ? "bar" : "bar zero", x: i * bw + 1, y: H - bh, width: Math.max(1, bw - 2), height: bh },
+          svg("title", {}, `${fmtDate(p.date)}: ${format(p.value)}`));
+      }),
+    ),
+    h("div", { class: "row between hint" }, h("span", {}, fmtDate(points[0].date)), h("span", {}, fmtDate(points[points.length - 1].date))),
+  );
+}
+
+// Zero-filled consecutive dates from `from` to `to` (inclusive, YYYY-MM-DD) using byDate values.
+export function dailyPoints(from, to, byDate) {
+  const out = [];
+  for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`); d = new Date(d.getTime() + 86_400_000)) {
+    const key = d.toISOString().slice(0, 10);
+    out.push({ date: key, value: byDate.get(key) ?? 0 });
+  }
+  return out;
+}
+
+export function successRate(attempts) {
+  const finished = Number(attempts.settled) + Number(attempts.expired) + Number(attempts.failed);
+  return { finished, rate: finished ? Math.round((Number(attempts.settled) / finished) * 1000) / 10 : null };
 }
 
 export function stat(label, value, sub) {
@@ -145,10 +183,11 @@ export function field(label, input, hint) {
   return h("div", { class: "field" }, h("label", { for: id }, label), input, hint ? h("p", { class: "hint" }, hint) : null);
 }
 
-// Tabbed shell driven by location.hash.
+// Tabbed shell driven by location.hash. Every switch renders into a fresh panel, so a slow
+// render of the previous tab finishes into a detached element instead of overwriting this one.
 export function tabs(container, ids, labelFor, render) {
   const nav = h("div", { class: "tabs", role: "tablist" });
-  const panel = h("section", { role: "tabpanel" });
+  let panel = h("section", { role: "tabpanel" });
   const current = () => (ids.includes(location.hash.slice(1)) ? location.hash.slice(1) : ids[0]);
   const draw = () => {
     const active = current();
@@ -166,9 +205,11 @@ export function tabs(container, ids, labelFor, render) {
         }, labelFor(id))
       ),
     );
-    panel.replaceChildren(loading());
-    Promise.resolve(render(active, panel)).catch((err) => {
-      panel.replaceChildren(h("p", { class: "notice bad" }, err?.message ?? String(err)));
+    const fresh = h("section", { role: "tabpanel" }, loading());
+    panel.replaceWith(fresh);
+    panel = fresh;
+    Promise.resolve(render(active, fresh)).catch((err) => {
+      fresh.replaceChildren(h("p", { class: "notice bad" }, err?.message ?? String(err)));
     });
   };
   window.addEventListener("hashchange", draw);

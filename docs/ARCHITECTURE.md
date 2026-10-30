@@ -18,9 +18,9 @@
 | Layer | Where | Notes |
 |---|---|---|
 | Static site | `public/`, `wrangler.jsonc` | Vanilla HTML/JS modules, no build. Extensionless HTML (`html_handling: auto-trailing-slash`); unknown paths serve `404.html`, which resolves `/<slug>` and `/pay/<slug>` in `pay.js`. |
-| Preview Worker | `worker/` | Route on every site hostname. Crawlers get OG HTML; `/og/<slug>.v<ver>t<tpl>.png` proxies `og-image` with a 1-year cache. Everyone else passes through to the static Worker. |
+| Preview Worker | `worker/` | Route on every site hostname. Crawlers get OG HTML; `/og/<slug>.v<ver>t<tpl>.png` proxies `og-image` with a 1-year cache. Everyone else passes through to the static Worker. Routes run before a Custom Domain on the same hostname and `fetch(request)` reaches it (Cloudflare docs, Custom Domains → Interaction with Routes). `_headers` only applies to static-asset responses, so the Worker sets its own headers; a Supabase outage yields a neutral uncached preview, never a cached "not found". |
 | Database | `supabase/migrations/` | Postgres + RLS. Every write is a `SECURITY DEFINER` RPC with `search_path = ''`. Default privileges deny `EXECUTE` and table access to `anon`/`authenticated`; each migration grants exactly what it needs. |
-| Functions | `supabase/functions/` | Deno. Each has `handler.ts` (pure, dependency-injected, unit tested) and `index.ts` (wiring). |
+| Functions | `supabase/functions/` | Deno, 12 functions. Each has `handler.ts` (pure, dependency-injected, unit tested) and `index.ts` (wiring). Invoice creation is shared in `_shared/invoice.ts`. |
 | Lightning | operator's LND | REST via Cloudflare Tunnel, protected by Access service-token headers; invoice-only macaroon. |
 
 ## Request flows
@@ -67,6 +67,36 @@ current cycle computed on the fly plus stored history.
 the user's preferences are resolved at enqueue time; `telegram-notify` claims with `FOR UPDATE SKIP LOCKED`,
 retries transient errors up to 5 times and fails permanent ones immediately.
 
+**Admin-issued invoices.** Admin → Invoices → *Create invoice* calls `admin-actions` (`create_invoice`),
+which runs the same `issueInvoice()` path as checkout (`_shared/invoice.ts`: SQL validation, limits,
+`checkout_enabled`, rate, LND, commission stamp) and stores a payer `memo` and `issued_by`. The admin gets
+`https://<domain>/<slug>?i=<payment id>`; the checkout reads it through the public `invoice` function, which
+returns the BOLT11 only while the invoice is pending, and opens straight to the QR. *Cancel* calls LND
+`POST /v2/invoices/cancel`, then looks the invoice up: `CANCELED` → expired, `SETTLED` → credited, still
+`OPEN` → error (nothing is marked expired that could still be paid). Both actions are audited.
+
+**Reports and overview.** `my_report(month)` (Dhaka calendar month) gives the user totals, attempts by
+status (success rate = paid ÷ paid+expired+failed), daily earnings by cycle, top links and recent paid
+payments. `admin_overview()` gives revenue incl. commission (today = current cycle, month, all time),
+commission, *payable* (settled net − withdrawals already paid), open withdrawals, users, links, outstanding
+statements and invoices, a 30-cycle chart and top users.
+
+**Statements management.** `admin_create_statement(user, cycle)` builds one user's statement (even with zero
+payments); `admin_update_statement` moves `closed → paid_out` (payout reference required) or
+`paid_out → closed` (reason required) and adds notes. Amounts are always recomputed from payments, never typed.
+
+**Payment methods.** Edited in their own admin tab (structured editor over `app_settings.payout_methods`).
+A method can be disabled (`"enabled": false`): it disappears from `my_app_config`, new destinations and
+withdrawals refuse it, saved destinations stay intact.
+
+**Two-factor.** Users (admins especially) enroll TOTP in Dashboard → Settings (`auth.mfa.enroll` +
+`challengeAndVerify`). Any session whose user has a verified factor is asked for the code after login and
+before the dashboard/admin load. `admin_require_mfa` makes every admin RPC demand an aal2 session; a trigger on
+`app_settings` refuses to switch it on from an admin session that is not aal2, so an admin cannot lock
+themselves out. Admins can also create users directly (`create_user`: service-role `auth.admin.createUser`,
+optional immediate activation and commission; with no password the user gets a set-password email sent to
+an active site domain only).
+
 **Multi-domain.** `site_domains` lists hostnames. Links only resolve when the request hostname is active
 (checkout and crawlers both pass it). The dashboard shows each link on every active domain.
 
@@ -97,8 +127,12 @@ retries transient errors up to 5 times and fails permanent ones immediately.
 - **Expiry.** We trust LND to cancel expired invoices and add a 2-minute grace before expiring an invoice
   that still reads `OPEN`, to avoid racing a last-second payment.
 - **Admin panel strings** are English (the `t()` fallback); every user-facing string is bilingual.
-- **OG images** use satori's default font; names in scripts it lacks (e.g. Bangla) may render as boxes.
-  Add a Noto font to `og-image` if that matters for your users.
+- **OG images.** `og-image` shapes every string with HarfBuzz (harfbuzzjs 0.3.6 wasm, `og-image/shaper.ts`)
+  using Noto Sans + Noto Sans Bengali, draws the glyphs as SVG paths and rasterizes with resvg (wasm). This is
+  what makes Bangla names correct (satori and resvg's own text layout both mangle Bangla conjuncts and vowel
+  signs), and because user text only ever becomes glyph paths, it cannot inject SVG markup. The wasm modules
+  and fonts are fetched once per isolate from pinned jsDelivr URLs. Check output locally with
+  `npm run og:preview` (writes `test-results/og/*.png`).
 - **Brand.** "Boltpage" is a working name. Rename by changing `BRAND_NAME` (config, Worker var, function
   env) and the literal in HTML titles/headers (`grep -r Boltpage public worker`), then `npm run og:render`.
 
@@ -120,6 +154,7 @@ retries transient errors up to 5 times and fails permanent ones immediately.
 | M11 Telegram | `0008_telegram.sql`, `telegram-webhook`, `telegram-notify` | `ci/sql/07_telegram.sql`, `telegram_test.ts` |
 | M12 multi-domain + OG | `site_domains`, `worker/`, `og-image`, `scripts/render-og.mjs` | `tests/unit/og-worker.test.mjs`, `03_links_checkout.sql` |
 | M13 hardening | `public/_headers`, `ci/check_public_copy.mjs`, `.gitleaks.toml`, `docs/GO-LIVE.md` | `tests/unit/public-copy.test.mjs`, gitleaks job |
+| M14 reference parity | `0010_reports_invoices_mfa.sql`, `_shared/invoice.ts`, `invoice`, `admin-actions` (invoices, users), `admin.js` (overview, invoices, payment methods, create user), `dashboard.js` (reports, two-factor), `auth.js` (code step, password toggle) | `ci/sql/09_reports_invoices_mfa.sql`, `admin_invoice_test.ts`, `tests/e2e/app.spec.mjs` |
 
 ## Acceptance tests → where they run
 

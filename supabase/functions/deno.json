@@ -1,5 +1,6 @@
 {
   "lock": false,
+  "nodeModulesDir": "none",
   "compilerOptions": {
     "strict": true
   }

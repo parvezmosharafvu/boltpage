@@ -44,7 +44,10 @@ supabase functions deploy
   ```sql
   update public.profiles set role = 'admin', account_status = 'active' where email = '<you@example.com>';
   ```
-- Enroll TOTP for every admin, then Admin → Settings → `admin_require_mfa = true`.
+- Every admin: Dashboard → Settings → *Set up two-factor*, scan the QR in an authenticator app and verify a
+  code (this session is now aal2). Then Admin → Settings → `admin_require_mfa = true`. The switch is refused
+  from a session without two-factor, so you cannot lock yourself out.
+- Admin → Payment methods: add the methods you pay out with (they are only ever shown inside the dashboard).
 
 ## 5. Settings (Admin → Settings)
 `min_usd` 10, `max_usd` 1000, `invoice_expiry_seconds` 3600, `default_commission_pct`, `withdrawal_min_usd`,
@@ -53,9 +56,11 @@ supabase functions deploy
 ## 6. Cloudflare Workers + domains
 ```bash
 SUPABASE_URL=https://<project-ref>.supabase.co SUPABASE_ANON_KEY=<anon> npm run config
-npx wrangler deploy                                   # static site (custom domains in wrangler.jsonc)
-cd worker && npx wrangler secret put SUPABASE_ANON_KEY && npx wrangler deploy
+npx wrangler deploy                                   # static site first (custom domains create DNS + certs)
+cd worker && npx wrangler secret put SUPABASE_URL && npx wrangler secret put SUPABASE_ANON_KEY && npx wrangler deploy
 ```
+Replace the `pay.example.*` placeholders in both `wrangler.jsonc` files with your hostnames first; each one
+must be in a zone on the Cloudflare account `wrangler whoami` shows, with no existing CNAME record.
 Admin → Domains: add each hostname. Visit `/` and `/<slug>` on each; an unknown host shows 404.
 
 ## 7. Telegram

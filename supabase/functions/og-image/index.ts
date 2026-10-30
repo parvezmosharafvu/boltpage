@@ -1,9 +1,8 @@
 // GET ?slug=<slug>&v=<version> -> 1200x630 PNG. The preview Worker proxies and caches this
 // under a versioned file name, so a year-long cache is safe and edits bust it.
-import { ImageResponse } from "https://deno.land/x/og_edge@0.0.4/mod.ts";
 import { serviceClient } from "../_shared/auth.ts";
 import { brandName } from "../_shared/deps.ts";
-import { linkCard } from "./card.ts";
+import { renderLinkCard } from "./render.ts";
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
 
@@ -19,13 +18,19 @@ Deno.serve(async (req) => {
     return new Response("not found", { status: 404, headers: { "Cache-Control": "public, max-age=60" } });
   }
 
-  const image = new ImageResponse(linkCard(link.display_name, link.note, brandName()), { width: 1200, height: 630 });
-  return new Response(image.body, {
-    status: 200,
-    headers: {
-      "Content-Type": "image/png",
-      "Cache-Control": url.searchParams.has("v") ? "public, max-age=31536000, immutable" : "public, max-age=300",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  try {
+    const png = await renderLinkCard(link.display_name, link.note, brandName());
+    return new Response(png, {
+      status: 200,
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": url.searchParams.has("v") ? "public, max-age=31536000, immutable" : "public, max-age=300",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (err) {
+    // The preview Worker falls back to the static default image on any non-200.
+    console.error("og render failed:", err instanceof Error ? err.message : String(err));
+    return new Response("render failed", { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
 });
