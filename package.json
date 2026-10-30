@@ -11,6 +11,7 @@
     "vendor": "node scripts/vendor.mjs",
     "config": "node scripts/write-config.mjs",
     "og:render": "node scripts/render-og.mjs",
+    "og:preview": "deno run --config supabase/functions/deno.json --allow-net --allow-read --allow-write --allow-env scripts/og-preview.ts",
     "dev:mock": "node tests/e2e/mock-server.mjs",
     "check:copy": "node ci/check_public_copy.mjs",
     "test:sql": "node ci/run-sql-tests.mjs",

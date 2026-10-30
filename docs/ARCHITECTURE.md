@@ -127,8 +127,12 @@ an active site domain only).
 - **Expiry.** We trust LND to cancel expired invoices and add a 2-minute grace before expiring an invoice
   that still reads `OPEN`, to avoid racing a last-second payment.
 - **Admin panel strings** are English (the `t()` fallback); every user-facing string is bilingual.
-- **OG images** use satori's default font; names in scripts it lacks (e.g. Bangla) may render as boxes.
-  Add a Noto font to `og-image` if that matters for your users.
+- **OG images.** `og-image` shapes every string with HarfBuzz (harfbuzzjs 0.3.6 wasm, `og-image/shaper.ts`)
+  using Noto Sans + Noto Sans Bengali, draws the glyphs as SVG paths and rasterizes with resvg (wasm). This is
+  what makes Bangla names correct (satori and resvg's own text layout both mangle Bangla conjuncts and vowel
+  signs), and because user text only ever becomes glyph paths, it cannot inject SVG markup. The wasm modules
+  and fonts are fetched once per isolate from pinned jsDelivr URLs. Check output locally with
+  `npm run og:preview` (writes `test-results/og/*.png`).
 - **Brand.** "Boltpage" is a working name. Rename by changing `BRAND_NAME` (config, Worker var, function
   env) and the literal in HTML titles/headers (`grep -r Boltpage public worker`), then `npm run og:render`.
 
