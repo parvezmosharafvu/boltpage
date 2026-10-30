@@ -10,8 +10,7 @@
   // Workers Logs: lookup / og-image failures are logged (status only, never keys).
   "observability": { "enabled": true },
   "routes": [
-    { "pattern": "pay.example.com/*", "zone_name": "example.com" },
-    { "pattern": "pay.example.net/*", "zone_name": "example.net" }
+    { "pattern": "cpay-cash.app/*", "zone_name": "cpay-cash.app" }
   ],
   "vars": {
     "BRAND_NAME": "Boltpage"

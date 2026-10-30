@@ -1,4 +1,4 @@
-import { serviceClient } from "../_shared/auth.ts";
+import { ipHashSalt, serviceClient } from "../_shared/auth.ts";
 import { getLnd, rateLimit, transitionStore } from "../_shared/deps.ts";
 import { loadSettings } from "../_shared/settings.ts";
 import { createHandler, type PaymentRow } from "./handler.ts";
@@ -20,5 +20,5 @@ Deno.serve(createHandler({
   lookupInvoice: (hash) => getLnd().lookupInvoice(hash),
   rateLimit,
   limitPerMinute: async () => (await loadSettings(serviceClient())).rateLimitStatusPerMin,
-  ipSalt: Deno.env.get("IP_HASH_SALT") ?? "",
+  ipSalt: ipHashSalt(),
 }));

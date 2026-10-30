@@ -72,12 +72,23 @@ Deno.test("parseCommand", () => {
   assertEquals(parseCommand("hello"), { kind: "help" });
 });
 
-Deno.test("cron secret check fails closed", () => {
+Deno.test("cron secret check fails closed", async () => {
   const req = new Request("https://fn.test", { headers: { "x-cron-secret": "s3cret" } });
-  assertEquals(hasCronSecret(req, "s3cret"), true);
-  assertEquals(hasCronSecret(req, "other"), false);
-  assertEquals(hasCronSecret(req, undefined), false);
-  assertEquals(hasCronSecret(new Request("https://fn.test"), ""), false);
+  assertEquals(await hasCronSecret(req, "s3cret"), true);
+  assertEquals(await hasCronSecret(req, "other"), false);
+  assertEquals(await hasCronSecret(req, undefined), false);
+  assertEquals(await hasCronSecret(new Request("https://fn.test"), ""), false);
+});
+
+Deno.test("without CRON_SECRET the header is checked against Vault; errors deny", async () => {
+  const req = new Request("https://fn.test", { headers: { "x-cron-secret": "from-vault" } });
+  const seen: string[] = [];
+  const vault = (s: string) => (seen.push(s), Promise.resolve(s === "from-vault"));
+  assertEquals(await hasCronSecret(req, undefined, vault), true);
+  assertEquals(await hasCronSecret(req, "env-wins", vault), false); // a function secret takes precedence
+  assertEquals(await hasCronSecret(new Request("https://fn.test"), undefined, vault), false);
+  assertEquals(seen, ["from-vault"]); // never asked without a header or when CRON_SECRET is set
+  assertEquals(await hasCronSecret(req, undefined, () => Promise.reject(new Error("db down"))), false);
 });
 
 Deno.test("notify drains the outbox and marks permanent failures without retry", async () => {

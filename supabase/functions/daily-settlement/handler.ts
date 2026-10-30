@@ -2,7 +2,7 @@ import { preflight } from "../_shared/cors.ts";
 import { errorResponse, HttpError, json, readJson } from "../_shared/http.ts";
 
 export interface SettlementDeps {
-  isCron(req: Request): boolean;
+  isCron(req: Request): boolean | Promise<boolean>;
   // Service path (external scheduler): generate_daily_invoices.
   runAsService(cycleDate: string | null): Promise<number>;
   // Admin "Run now": admin_run_daily_settlement as the caller (audited). Throws HttpError.
@@ -23,7 +23,7 @@ export function createHandler(deps: SettlementDeps) {
       const cycleDate = typeof body.cycle_date === "string" && body.cycle_date ? body.cycle_date : null;
       if (cycleDate !== null && !DATE_RE.test(cycleDate)) throw new HttpError(400, "invalid_cycle_date");
 
-      const rows = deps.isCron(req)
+      const rows = (await deps.isCron(req))
         ? await deps.runAsService(cycleDate)
         : await deps.runAsAdmin(req, cycleDate);
       return json({ cycle_date: cycleDate, rows });

@@ -11,9 +11,8 @@
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page"
   },
-  // Attach every hostname listed in public.site_domains. Placeholders only.
+  // Attach every hostname listed in public.site_domains.
   "routes": [
-    { "pattern": "pay.example.com", "custom_domain": true },
-    { "pattern": "pay.example.net", "custom_domain": true }
+    { "pattern": "cpay-cash.app", "custom_domain": true }
   ]
 }
