@@ -3,6 +3,9 @@
 {
   "name": "boltpage-site",
   "compatibility_date": "2025-10-01",
+  // Served only on the custom domains below (a workers.dev copy would bypass the preview Worker).
+  "workers_dev": false,
+  "preview_urls": false,
   "assets": {
     "directory": "./public",
     "html_handling": "auto-trailing-slash",

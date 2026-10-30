@@ -18,7 +18,7 @@
 | Layer | Where | Notes |
 |---|---|---|
 | Static site | `public/`, `wrangler.jsonc` | Vanilla HTML/JS modules, no build. Extensionless HTML (`html_handling: auto-trailing-slash`); unknown paths serve `404.html`, which resolves `/<slug>` and `/pay/<slug>` in `pay.js`. |
-| Preview Worker | `worker/` | Route on every site hostname. Crawlers get OG HTML; `/og/<slug>.v<ver>t<tpl>.png` proxies `og-image` with a 1-year cache. Everyone else passes through to the static Worker. |
+| Preview Worker | `worker/` | Route on every site hostname. Crawlers get OG HTML; `/og/<slug>.v<ver>t<tpl>.png` proxies `og-image` with a 1-year cache. Everyone else passes through to the static Worker. Routes run before a Custom Domain on the same hostname and `fetch(request)` reaches it (Cloudflare docs, Custom Domains → Interaction with Routes). `_headers` only applies to static-asset responses, so the Worker sets its own headers; a Supabase outage yields a neutral uncached preview, never a cached "not found". |
 | Database | `supabase/migrations/` | Postgres + RLS. Every write is a `SECURITY DEFINER` RPC with `search_path = ''`. Default privileges deny `EXECUTE` and table access to `anon`/`authenticated`; each migration grants exactly what it needs. |
 | Functions | `supabase/functions/` | Deno, 12 functions. Each has `handler.ts` (pure, dependency-injected, unit tested) and `index.ts` (wiring). Invoice creation is shared in `_shared/invoice.ts`. |
 | Lightning | operator's LND | REST via Cloudflare Tunnel, protected by Access service-token headers; invoice-only macaroon. |

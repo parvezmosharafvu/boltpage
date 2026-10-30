@@ -10,11 +10,13 @@ const SAFARI = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebK
 
 let calls;
 let cached;
+let failing; // upstream paths that answer 503
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
   calls = [];
   cached = new Map();
+  failing = new Set();
   globalThis.caches = {
     default: {
       match: async (req) => cached.get(req.url)?.clone(),
@@ -25,6 +27,7 @@ beforeEach(() => {
     const req = input instanceof Request ? input : new Request(input, init);
     calls.push({ url: req.url, body: init.body ?? null, headers: req.headers });
     const url = new URL(req.url);
+    if (failing.has(url.pathname)) return new Response("unavailable", { status: 503 });
     if (url.pathname === "/rest/v1/rpc/public_link_by_slug") {
       const { p_slug, p_hostname } = JSON.parse(init.body);
       const active = ["pay.example.com", "pay.example.net"].includes(p_hostname);
@@ -58,6 +61,25 @@ test("crawler gets OG HTML with escaped name and versioned image", async () => {
   assert.doesNotMatch(html, /<script>/);
   const rpc = calls.find((c) => c.url.endsWith("/rpc/public_link_by_slug"));
   assert.deepEqual(JSON.parse(rpc.body), { p_slug: "alice", p_hostname: "pay.example.com" });
+  // _headers does not reach Worker-built responses, so the Worker sets its own.
+  assert.match(res.headers.get("content-security-policy"), /default-src 'none'/);
+  assert.equal(res.headers.get("vary"), "User-Agent");
+  assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+});
+
+test("lookup outage -> neutral 200 preview that is not cached, never 'not found'", async () => {
+  failing.add("/rest/v1/rpc/public_link_by_slug");
+  const res = await get("https://pay.example.com/alice", WHATSAPP);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  const html = await res.text();
+  assert.match(html, /og:title" content="Payment link"/);
+  assert.match(html, /og-default-v1\.png/);
+
+  // Same when the SUPABASE_URL secret was never set.
+  const unset = await worker.fetch(new Request("https://pay.example.com/alice", { headers: { "user-agent": WHATSAPP } }), { BRAND_NAME: "Boltpage" }, ctx);
+  assert.equal(unset.status, 200);
+  assert.match(await unset.text(), /og:title" content="Payment link"/);
 });
 
 test("normal browsers get the checkout page (pass-through)", async () => {
@@ -90,6 +112,21 @@ test("per-link image is proxied once and then served from cache with a year-long
   await get("https://pay.example.com/og/alice.v1767225600t1.png", "Slackbot-LinkExpanding 1.0");
   assert.equal(calls.filter((c) => c.url.includes("/functions/v1/og-image")).length, 1);
   assert.match(calls[0].url, /og-image\?slug=alice&v=1767225600t1$/);
+});
+
+test("image function outage -> default card with a short TTL, retried on the next request", async () => {
+  failing.add("/functions/v1/og-image");
+  const url = "https://pay.example.com/og/alice.v1767225600t1.png";
+  const first = await get(url, "Slackbot-LinkExpanding 1.0");
+  assert.equal(first.headers.get("cache-control"), "public, max-age=300");
+  assert.equal(first.headers.get("content-type"), "image/png");
+  assert.equal(await first.text(), "origin:/assets/og/og-default-v1.png");
+  assert.equal(cached.size, 0);
+
+  failing.clear();
+  const second = await get(url, "Slackbot-LinkExpanding 1.0");
+  assert.equal(second.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  assert.equal(calls.filter((c) => c.url.includes("/functions/v1/og-image")).length, 2);
 });
 
 test("crawler detection and escaping", () => {

@@ -4,13 +4,18 @@
   "name": "boltpage-og-preview",
   "main": "og-preview-worker.js",
   "compatibility_date": "2025-10-01",
+  // Only reachable through the site hostnames below; no *.workers.dev or preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
+  // Workers Logs: lookup / og-image failures are logged (status only, never keys).
+  "observability": { "enabled": true },
   "routes": [
     { "pattern": "pay.example.com/*", "zone_name": "example.com" },
     { "pattern": "pay.example.net/*", "zone_name": "example.net" }
   ],
   "vars": {
-    "SUPABASE_URL": "https://<project-ref>.supabase.co",
     "BRAND_NAME": "Boltpage"
   }
-  // SUPABASE_ANON_KEY is public, but set it with `wrangler secret put SUPABASE_ANON_KEY` to keep it out of git.
+  // SUPABASE_URL and SUPABASE_ANON_KEY are public, but they name the project, so they are set with
+  // `wrangler secret put` (kept across deploys) instead of living in git.
 }

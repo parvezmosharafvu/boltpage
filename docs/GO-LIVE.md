@@ -56,9 +56,11 @@ supabase functions deploy
 ## 6. Cloudflare Workers + domains
 ```bash
 SUPABASE_URL=https://<project-ref>.supabase.co SUPABASE_ANON_KEY=<anon> npm run config
-npx wrangler deploy                                   # static site (custom domains in wrangler.jsonc)
-cd worker && npx wrangler secret put SUPABASE_ANON_KEY && npx wrangler deploy
+npx wrangler deploy                                   # static site first (custom domains create DNS + certs)
+cd worker && npx wrangler secret put SUPABASE_URL && npx wrangler secret put SUPABASE_ANON_KEY && npx wrangler deploy
 ```
+Replace the `pay.example.*` placeholders in both `wrangler.jsonc` files with your hostnames first; each one
+must be in a zone on the Cloudflare account `wrangler whoami` shows, with no existing CNAME record.
 Admin → Domains: add each hostname. Visit `/` and `/<slug>` on each; an unknown host shows 404.
 
 ## 7. Telegram

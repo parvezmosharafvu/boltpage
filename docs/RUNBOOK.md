@@ -61,7 +61,9 @@ take effect immediately on every domain and for crawlers.
 
 ## Adding a custom domain
 1. Cloudflare: add the hostname as a custom domain of `boltpage-site` (`wrangler.jsonc` routes) and as a
-   route of `boltpage-og-preview` (`worker/wrangler.jsonc`), then deploy both.
+   route of `boltpage-og-preview` (`worker/wrangler.jsonc`), then deploy both, site first: the custom
+   domain creates the proxied DNS record and certificate that the route needs. The hostname must not
+   already have a CNAME record.
 2. Supabase Auth → URL configuration: add `https://<host>/reset` and `https://<host>/login` to redirect URLs.
 3. Admin → Domains → add the hostname (active). Links now work there; unknown hosts keep showing 404.
 

@@ -4,7 +4,7 @@ Nothing secret is ever committed, written to `public/`, or logged. Values below 
 
 | Name | Secret? | Where it is set | Used by |
 |---|---|---|---|
-| `SUPABASE_URL` | no | `npm run config` env (→ `public/config.js`), `worker/wrangler.jsonc` vars, auto-injected in functions | browser, preview Worker, functions |
+| `SUPABASE_URL` | no | `npm run config` env (→ `public/config.js`); `wrangler secret put SUPABASE_URL` for the preview Worker (keeps the project ref out of git); auto-injected in functions | browser, preview Worker, functions |
 | `SUPABASE_ANON_KEY` | no (public by design) | `npm run config` env (→ `public/config.js`); `wrangler secret put SUPABASE_ANON_KEY` for the preview Worker; auto-injected in functions | browser, preview Worker |
 | `SUPABASE_SERVICE_ROLE_KEY` | **yes** | auto-injected into Supabase functions only | functions (service RPCs) |
 | `LND_REST_URL` | semi | `supabase secrets set LND_REST_URL=https://<lnd-tunnel-hostname>` | create-invoice, payment-status, lnd-watcher, health, node-status |
@@ -32,8 +32,8 @@ supabase secrets set \
 # Public config for the static site (anon key only; the script refuses service-role keys)
 SUPABASE_URL=https://<project-ref>.supabase.co SUPABASE_ANON_KEY=<anon> npm run config
 
-# Preview Worker
-cd worker && wrangler secret put SUPABASE_ANON_KEY
+# Preview Worker (secrets survive later deploys)
+cd worker && wrangler secret put SUPABASE_URL && wrangler secret put SUPABASE_ANON_KEY
 ```
 
 Generate random secrets with `openssl rand -hex 32`.
