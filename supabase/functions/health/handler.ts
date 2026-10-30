@@ -4,7 +4,7 @@ import { json } from "../_shared/http.ts";
 export interface HealthDeps {
   checkDb(): Promise<boolean>;
   checkLnd(): Promise<{ reachable: boolean; synced: boolean }>;
-  isCron(req: Request): boolean;
+  isCron(req: Request): boolean | Promise<boolean>;
   alertAdmins(text: string, dedupeKey: string): Promise<void>;
   now?: () => Date;
 }
@@ -19,7 +19,7 @@ export function createHandler(deps: HealthDeps) {
     const lnd = await deps.checkLnd().catch(() => ({ reachable: false, synced: false }));
     const ok = db && lnd.reachable && lnd.synced;
 
-    if (!ok && deps.isCron(req)) {
+    if (!ok && (await deps.isCron(req))) {
       const hour = now.toISOString().slice(0, 13);
       await deps
         .alertAdmins(

@@ -8,7 +8,7 @@ export interface OutboxMessage {
 }
 
 export interface NotifyDeps {
-  isAuthorized(req: Request): boolean;
+  isAuthorized(req: Request): boolean | Promise<boolean>;
   token: string | undefined;
   claim(limit: number): Promise<OutboxMessage[]>;
   complete(id: number, ok: boolean, error: string | null, retry: boolean): Promise<void>;
@@ -19,7 +19,7 @@ export interface NotifyDeps {
 export function createHandler(deps: NotifyDeps) {
   return async (req: Request): Promise<Response> => {
     try {
-      if (!deps.isAuthorized(req)) throw new HttpError(401, "unauthorized");
+      if (!(await deps.isAuthorized(req))) throw new HttpError(401, "unauthorized");
       if (!deps.token) throw new HttpError(503, "telegram_not_configured");
 
       const messages = await deps.claim(50);

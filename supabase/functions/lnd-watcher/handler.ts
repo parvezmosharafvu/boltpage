@@ -8,7 +8,7 @@ export interface PendingPayment {
 }
 
 export interface WatcherDeps extends TransitionStore {
-  isAuthorized(req: Request): boolean;
+  isAuthorized(req: Request): boolean | Promise<boolean>;
   listPending(limit: number): Promise<PendingPayment[]>;
   lookupInvoice(paymentHash: string): Promise<LookupResult | null>;
   now?: () => Date;
@@ -21,7 +21,7 @@ const CONCURRENCY = 5;
 export function createHandler(deps: WatcherDeps) {
   return async (req: Request): Promise<Response> => {
     try {
-      if (!deps.isAuthorized(req)) throw new HttpError(401, "unauthorized");
+      if (!(await deps.isAuthorized(req))) throw new HttpError(401, "unauthorized");
       const pending = await deps.listPending(BATCH);
       const summary = { checked: 0, settled: 0, expired: 0, failed: 0, errors: 0 };
 

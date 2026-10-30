@@ -1,10 +1,9 @@
-import { hasCronSecret } from "../_shared/cron.ts";
-import { rpc } from "../_shared/deps.ts";
+import { isCronRequest, rpc } from "../_shared/deps.ts";
 import { sendTelegramMessage } from "../_shared/telegram.ts";
 import { createHandler, type OutboxMessage } from "./handler.ts";
 
 Deno.serve(createHandler({
-  isAuthorized: (req) => hasCronSecret(req),
+  isAuthorized: isCronRequest,
   token: Deno.env.get("TELEGRAM_BOT_TOKEN"),
   claim: (limit) => rpc<OutboxMessage[]>("claim_notifications", { p_limit: limit }),
   async complete(id, ok, error, retry) {

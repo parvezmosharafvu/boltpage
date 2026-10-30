@@ -37,7 +37,8 @@ supabase functions deploy
 ```
 - Enable `pg_cron` and `pg_net` (Database → Extensions) **before** `db push`, or re-run `0009_cron.sql`'s
   `do $cron$ … $cron$` block afterwards.
-- Vault: `project_url` and `cron_secret` (docs/SECRETS.md). Check `select jobname, schedule from cron.job;`.
+- Vault: add `project_url` (docs/SECRETS.md); `cron_secret` is created by migration 0011. Check
+  `select jobname, schedule from cron.job;`.
 - Auth: site URL, redirect URLs for every domain (`/login`, `/reset`), email confirmation on, leaked-password
   protection on, MFA (TOTP) enabled.
 - Bootstrap the first admin in the SQL editor (runs as `postgres`, which the profile guard allows):

@@ -1,4 +1,4 @@
-import { requireAdmin, requireEnv, serviceClient } from "../_shared/auth.ts";
+import { requireAdmin, requireEnv, serviceClient, telegramWebhookSecret } from "../_shared/auth.ts";
 import { getLnd, transitionStore } from "../_shared/deps.ts";
 import { dbError, HttpError } from "../_shared/http.ts";
 import { issueInvoice } from "../_shared/invoice.ts";
@@ -7,6 +7,7 @@ import { sendTelegramMessage, telegramApi } from "../_shared/telegram.ts";
 import { createHandler } from "./handler.ts";
 
 const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+const webhookSecret = await telegramWebhookSecret();
 
 function randomPassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
@@ -31,7 +32,7 @@ Deno.serve(createHandler({
   },
   telegram: {
     token,
-    webhookSecret: Deno.env.get("TELEGRAM_WEBHOOK_SECRET"),
+    webhookSecret,
     webhookUrl: `${requireEnv("SUPABASE_URL")}/functions/v1/telegram-webhook`,
     call: (method, payload) => telegramApi(token ?? "", method, payload),
     send: (chatId, text) => sendTelegramMessage(token ?? "", chatId, text),

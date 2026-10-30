@@ -1,11 +1,10 @@
 import { serviceClient } from "../_shared/auth.ts";
-import { hasCronSecret } from "../_shared/cron.ts";
-import { getLnd, transitionStore } from "../_shared/deps.ts";
+import { getLnd, isCronRequest, transitionStore } from "../_shared/deps.ts";
 import { createHandler, type PendingPayment } from "./handler.ts";
 
 Deno.serve(createHandler({
   ...transitionStore,
-  isAuthorized: (req) => hasCronSecret(req),
+  isAuthorized: isCronRequest,
   async listPending(limit) {
     const { data, error } = await serviceClient()
       .from("payments")

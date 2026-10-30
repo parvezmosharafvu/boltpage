@@ -1,5 +1,6 @@
 // Production wiring shared by several functions: service-role RPC calls and the LND client.
 import { serviceClient } from "./auth.ts";
+import { hasCronSecret } from "./cron.ts";
 import { dbError } from "./http.ts";
 import { type LndClient, lndFromEnv } from "./lnd.ts";
 import type { TransitionStore } from "./settle.ts";
@@ -16,6 +17,10 @@ export async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Pr
   const { data, error } = await serviceClient().rpc(fn, args);
   if (error) throw dbError(error);
   return data as T;
+}
+
+export function isCronRequest(req: Request): Promise<boolean> {
+  return hasCronSecret(req, Deno.env.get("CRON_SECRET"), (secret) => rpc<boolean>("cron_secret_matches", { p_secret: secret }));
 }
 
 export function rateLimit(bucket: string, maxPerMinute: number): Promise<boolean> {

@@ -1,4 +1,4 @@
-import { serviceClient } from "../_shared/auth.ts";
+import { ipHashSalt, serviceClient } from "../_shared/auth.ts";
 import { rateLimit } from "../_shared/deps.ts";
 import { loadSettings } from "../_shared/settings.ts";
 import { createHandler } from "./handler.ts";
@@ -17,5 +17,5 @@ Deno.serve(createHandler({
   },
   rateLimit,
   limitPerMinute: async () => (await loadSettings(serviceClient())).rateLimitStatusPerMin,
-  ipSalt: Deno.env.get("IP_HASH_SALT") ?? "",
+  ipSalt: ipHashSalt(),
 }));
